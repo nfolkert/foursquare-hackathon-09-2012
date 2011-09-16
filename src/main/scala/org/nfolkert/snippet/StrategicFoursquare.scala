@@ -28,7 +28,7 @@ class StrategicFoursquare extends DispatchSnippet {
       // Are we on return from an oauth call?
       S.param("code").flatMap(code=>{
         tryo(oauth.accessTokenCaller(code).get)
-      }).map(t=>{Session.userToken(Some(t)); t}).getOrElse({
+      }).map(t=>{Session.userToken(Some(t)); S.redirectTo(S.uri)}).getOrElse({
         // Are we in testing mode?
         // TODO - check params; use either test data, or lookup based on test token in props
         S.param("test").map(p=>{
