@@ -3,11 +3,15 @@ package org.nfolkert.snippet
 import net.liftweb.util.Helpers._
 import xml.{Unparsed, NodeSeq, Text}
 import org.joda.time.DateTime
-import net.liftweb.http.{SHtml, DispatchSnippet, S, StatefulSnippet}
 import net.liftweb.common.Full
 import net.liftweb.http.js.{JsCmds, JsCmd, JE}
 import org.nfolkert.fssc.{VisitedPoints, Rectangle, MapGrid, Cluster, VPt}
 import org.scalafoursquare.auth.OAuthFlow
+import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
+
+object Session {
+  object userToken extends SessionVar[Option[String]](None)
+}
 
 class StrategicFoursquare extends DispatchSnippet {
 
@@ -17,8 +21,30 @@ class StrategicFoursquare extends DispatchSnippet {
   }
 
   def renderMap(xhtml: NodeSeq): NodeSeq = {
+    
+    // Finding user token
+    val token = Session.userToken.is.getOrElse({
+      val oauth = VisitedPoints.oauth
+      // Are we on return from an oauth call?
+      S.param("code").flatMap(code=>{
+        tryo(oauth.accessTokenCaller(code).get)
+      }).map(t=>{Session.userToken(Some(t)); t}).getOrElse({
+        // Are we in testing mode?
+        // TODO - check params; use either test data, or lookup based on test token in props
+        S.param("test").map(p=>{
+          if (p == "token")
+            VisitedPoints.AUTH_TOKEN
+          else
+            "test"
+        }).openOr({
+          // Otherwise call the authorize url
+          val url = oauth.authorizeUrl
+          S.redirectTo(url)
+        })
+      })
+    })
 
-    val visitPoints = VisitedPoints.getVisitedPoints
+    val visitPoints = VisitedPoints.getVisitedPoints(token)
     val clusters = Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size)
 
     if (!clusters.isEmpty) {

@@ -10,11 +10,18 @@ object VisitedPoints {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
   val CLIENT_ID = Props.get("consumer.key").open_!
   val CLIENT_SECRET = Props.get("consumer.secret").open_!
+  val CLIENT_CALLBACK = Props.get("consumer.callback.url").open_!
 
-  def getVisitedPoints: Set[VPt] = {
-    // sampleData
-    getPointsFromVenueHistory
-    // getPointsFromCheckinHistory
+  def oauth = {
+    new OAuthFlow(CLIENT_ID, CLIENT_SECRET, CLIENT_CALLBACK)
+  }
+
+  def getVisitedPoints(token: String): Set[VPt] = {
+    if (token == "test")
+      sampleData
+    else
+      getPointsFromVenueHistory(token)
+    // getPointsFromCheckinHistory(token)
   }
 
   def sampleData() = {
@@ -27,8 +34,8 @@ object VisitedPoints {
     )
   }
 
-  def getPointsFromVenueHistory() = {
-    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET), AUTH_TOKEN)
+  def getPointsFromVenueHistory(token: String) = {
+    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
 
     val venueHistory = app.selfVenueHistory().get
     venueHistory.response.map(r => {
@@ -39,8 +46,8 @@ object VisitedPoints {
     }).getOrElse(Set[VPt]())
   }
 
-  def getPointsFromCheckinHistory() = {
-    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET), AUTH_TOKEN)
+  def getPointsFromCheckinHistory(token: String) = {
+    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET), token)
 
     var baseOffset = 0
     var keepGoing = true;
