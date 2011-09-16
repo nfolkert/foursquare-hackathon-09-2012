@@ -7,3 +7,4 @@ target
 project/boot
 project/build/target
 src/main/resources/props/*.props
+sbt*
