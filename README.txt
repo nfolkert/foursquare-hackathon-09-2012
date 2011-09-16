@@ -1,0 +1,2 @@
+For fun I wanted to implement a view of my foursquare check-ins that looks like the "fog of war" map view from the
+old game Strategic Conquest.  Uses the Scala foursquare library at https://github.com/nfolkert/scala-foursquare-api
