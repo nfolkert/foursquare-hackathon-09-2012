@@ -1,0 +1,3 @@
+consumer.key=<foursquare oauth consumer key>
+consumer.secret=<foursquare oauth consumer secret>
+access.token.user=<access token for testing>

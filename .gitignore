@@ -1,0 +1,9 @@
+.idea
+*.iml
+scratch*
+lib/scalafoursquare_2.8.0-0.0.2.jar
+lib_managed/*
+target
+project/boot
+project/build/target
+src/main/resources/props/*.props
