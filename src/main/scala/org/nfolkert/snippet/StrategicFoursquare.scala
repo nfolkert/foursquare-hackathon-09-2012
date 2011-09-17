@@ -1,13 +1,13 @@
 package org.nfolkert.snippet
 
 import net.liftweb.util.Helpers._
-import xml.{Unparsed, NodeSeq, Text}
 import org.joda.time.DateTime
 import net.liftweb.common.Full
 import net.liftweb.http.js.{JsCmds, JsCmd, JE}
 import org.nfolkert.fssc.{VisitedPoints, Rectangle, MapGrid, Cluster, VPt}
 import org.scalafoursquare.auth.OAuthFlow
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
+import xml.{Elem, Unparsed, NodeSeq, Text}
 
 object Session {
   object userToken extends SessionVar[Option[String]](None)
@@ -51,8 +51,9 @@ class StrategicFoursquare extends DispatchSnippet {
       var clusterIdx = 0
       var gridSize = 333
       var opacity = 1.0
+      var showOverlayBorders = false
 
-      def generateCall() = {
+      def generateCall(resetZoom: Boolean) = {
         val cluster = if (clusterIdx < 0) {
           Cluster(visitPoints.toList(0), visitPoints)
         } else
@@ -86,7 +87,7 @@ class StrategicFoursquare extends DispatchSnippet {
 
         val call = "renderMap(\n" +
           "[" + rects.map(_.toJson).join(",") + "],\n" +
-          "[" + center._1 + "," + center._2 + "]," +
+          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
           zoom + ", " +
           opacity + ")"
 
@@ -94,26 +95,47 @@ class StrategicFoursquare extends DispatchSnippet {
         JsCmds.Run(call)
       }
 
+      val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
       val clusterOpts = (1 to clusters.size).toList.map(idx => ((idx-1).toString, idx.toString)) ++ List(((-1).toString, "ALL"))
+
+      def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
+        // There is no lift ajax range slider; only a regular range slider.  Wah.
+        import net.liftweb.util.Helpers._
+        import net.liftweb.http.js.JE.JsRaw
+
+        val fHolder = S.LFuncHolder(in => in.headOption.flatMap(asDouble(_)).map(fn(_)).getOrElse(JsCmds.Noop))
+
+        val raw = (funcName: String, value: String) => JsRaw("'" + funcName + "=' + encodeURIComponent(" + value + ".value)")
+        val key = S.formFuncName
+
+        S.fmapFunc(S.contextFuncBuilder(fHolder)) {
+          funcName =>
+            <input type="range" min={min.toString} max={max.toString} step={step.toString} value={value.toString} onchange={SHtml.makeAjaxCall(raw(funcName, "this")).toJsCmd}/>
+        }
+      }
 
       bind("map", xhtml,
            "setup" -> {
              val call = SHtml.ajaxCall(JE.JsRaw(""), (ignored) => {
-               generateCall()
+               generateCall(true)
              })._2.toJsCmd
              <script type="text/javascript">{call}</script>
            },
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full("0"), (newCluster) => {
              clusterIdx = tryo(newCluster.toInt).openOr(0)
-             generateCall()
+             generateCall(true)
            }),
-           "gridsize" -%> SHtml.ajaxText(gridSize.toString, (newVal) => {
+           "gridsize" -%> SHtml.ajaxSelect(gridSizeOpts, Full("250"), (newVal) => {
              gridSize = tryo(newVal.toInt).openOr(gridSize)
-             generateCall()
+             generateCall(false)
            }),
-           "opacity" -%> SHtml.ajaxText(opacity.toString, (newVal) => {
-             opacity = tryo(newVal.toDouble).openOr(opacity)
-             generateCall()
+           "opacity" -%> ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
+             opacity = newVal
+             JsCmds.Run("updateOpacity(" + opacity + ")")
+           }),
+           "overlayborders" -%> SHtml.ajaxCheckbox(showOverlayBorders, (newVal) => {
+             showOverlayBorders = newVal
+             JsCmds.Run("showBorders(" + showOverlayBorders + ")")
            })
       )
     }
