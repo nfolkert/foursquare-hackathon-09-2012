@@ -21,6 +21,7 @@ class StrategicFoursquare extends DispatchSnippet {
   }
 
   def renderMap(xhtml: NodeSeq): NodeSeq = {
+    val url = S.uri
     
     // Finding user token
     val token = Session.userToken.is.getOrElse({
@@ -28,7 +29,7 @@ class StrategicFoursquare extends DispatchSnippet {
       // Are we on return from an oauth call?
       S.param("code").flatMap(code=>{
         tryo(oauth.accessTokenCaller(code).get)
-      }).map(t=>{Session.userToken(Some(t)); S.redirectTo(S.uri)}).getOrElse({
+      }).map(t=>{Session.userToken(Some(t)); S.redirectTo(url)}).getOrElse({
         // Are we in testing mode?
         // TODO - check params; use either test data, or lookup based on test token in props
         S.param("test").map(p=>{
@@ -143,7 +144,8 @@ class StrategicFoursquare extends DispatchSnippet {
            "overlayborders" -%> SHtml.ajaxCheckbox(showOverlayBorders, (newVal) => {
              showOverlayBorders = newVal
              JsCmds.Run("showBorders(" + showOverlayBorders + ")")
-           })
+           }),
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo(url)})
       )
     }
     else
