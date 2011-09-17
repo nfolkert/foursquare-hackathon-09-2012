@@ -9,19 +9,19 @@ class MapGridTest extends SpecsMatchers {
   @Test
   def testMapGrid() {
     val grid = new MapGrid(400, 1.5, Set(
-      VPt(40.7228981, -73.9948043, 1, new DateTime()),
-      VPt(40.728709, -73.99479668571429, 1, new DateTime()),
-      VPt(40.725464, -73.990079, 1, new DateTime()),
-      VPt(45.516169, -122.67073, 1, new DateTime()),
-      VPt(40.68592592, -73.97349393333333, 3, new DateTime()),
-      VPt(40.6706459457292, -73.95802974700928, 1, new DateTime()),
-      VPt(40.76107323, -73.96382, 1, new DateTime()),
-      VPt(40.759451, -73.965252, 1, new DateTime()),
-      VPt(40.73321007823572, -73.98759841918945, 1, new DateTime())
+      DataPoint[VisitData](40.7228981, -73.9948043, Some(VisitData(1))),
+      DataPoint[VisitData](40.728709, -73.99479668571429, Some(VisitData(1))),
+      DataPoint[VisitData](40.725464, -73.990079, Some(VisitData(1))),
+      DataPoint[VisitData](45.516169, -122.67073, Some(VisitData(1))),
+      DataPoint[VisitData](40.68592592, -73.97349393333333, Some(VisitData(3))),
+      DataPoint[VisitData](40.6706459457292, -73.95802974700928, Some(VisitData(1))),
+      DataPoint[VisitData](40.76107323, -73.96382, Some(VisitData(1))),
+      DataPoint[VisitData](40.759451, -73.965252, Some(VisitData(1))),
+      DataPoint[VisitData](40.73321007823572, -73.98759841918945, Some(VisitData(1)))
     ))
 
     val clusters = Cluster.buildClusters(grid.points)
-    val decomposed = grid.decomposeWorldMap(grid.sortPointsByLatLng(grid.points))
+    val decomposed = grid.decompose
 
     println(clusters)
     println(decomposed)

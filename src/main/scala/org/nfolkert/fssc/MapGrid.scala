@@ -2,15 +2,17 @@ package org.nfolkert.fssc
 
 import org.joda.time.DateTime
 
-case class VPt(lat: Double, lng: Double, visits: Int=0, lastVisitOpt: Option[DateTime]=None) {
-  lazy val lastVisit = lastVisitOpt.getOrElse(new DateTime)
-  def distanceTo(pt: VPt): Double = {
+case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
+  def distanceTo(pt: DataPoint[_]): Double = {
     val theta = lng - pt.lng
     val distance = math.sin(math.toRadians(lat)) * math.sin(math.toRadians(pt.lat)) +
                    math.cos(math.toRadians(lat)) * math.cos(math.toRadians(pt.lat)) * math.cos(math.toRadians(theta))
     return math.floor(6378100 * math.acos(distance))
   }
+
 }
+
+case class VisitData(visits: Int=0, name: String, lastVisit: DateTime=new DateTime) {}
 
 case class Rectangle(left: Double, bottom: Double, right: Double, top: Double) {
   def isEmpty = right <= left || top <= bottom
@@ -104,19 +106,19 @@ object Rectangle {
   }
 }
 
-case class Cluster(anchor: VPt, pts: Set[VPt]) {
-  def bounds: (VPt, VPt) = {
+case class Cluster[T](anchor: DataPoint[T], pts: Set[DataPoint[T]]) {
+  def bounds = {
     val minL = pts.map(_.lng).min
     val maxR = pts.map(_.lng).max
     val minB = pts.map(_.lat).min
     val maxT = pts.map(_.lat).max
-    (VPt(minB, minL), VPt(maxT, maxR))
+    (DataPoint[Any](minB, minL), DataPoint[Any](maxT, maxR))
   }
 }
 
 object Cluster {
-  def buildClusters(pts: Set[VPt], clusterRad: Double = 40000.0): Set[Cluster] = {
-    val setup: scala.collection.mutable.Set[(VPt, scala.collection.mutable.Set[VPt])] = scala.collection.mutable.Set()
+  def buildClusters[T](pts: Set[DataPoint[T]], clusterRad: Double = 40000.0): Set[Cluster[T]] = {
+    val setup: scala.collection.mutable.Set[(DataPoint[T], scala.collection.mutable.Set[DataPoint[T]])] = scala.collection.mutable.Set()
 
     pts.map(pt=>{
       val closest = setup.map(c => (c, c._1.distanceTo(pt))).filter(_._2 < clusterRad).toList.sortBy(_._2).map(_._1).headOption
@@ -135,7 +137,7 @@ object Cluster {
 
 case class MapGrid(latGridSizeInMeters: Int,
                    latLngRatio: Double,
-                   points: Set[VPt]) {
+                   points: Set[DataPoint[VisitData]]) {
 
   val eqToPoleInMeters = 10000000.0 // Roughly
   val metersInDegLat = eqToPoleInMeters / 90.0 // Roughly
@@ -148,29 +150,30 @@ case class MapGrid(latGridSizeInMeters: Int,
   var latOne = 1/latSnap
   val lngOne = 1/lngSnap
 
-  def snapPoint(pt: VPt): VPt = {
+  def snapPoint[T](pt: DataPoint[T]): DataPoint[T] = {
     val snapLat = math.floor(pt.lat*latOne)/latOne
     val snapLng = math.floor(pt.lng*lngOne)/lngOne
-    new VPt(snapLat, snapLng, pt.visits, pt.lastVisitOpt)
+    new DataPoint(snapLat, snapLng, pt.data)
   }
 
-  def snapPoints(pts: Set[VPt]): Set[VPt] = {
+  def snapPoints[T](pts: Set[DataPoint[T]]): Set[DataPoint[T]] = {
     pts.map(pt=>snapPoint(pt))
   }
 
-  protected def combineSnapPoints(pts: Set[VPt]): Set[VPt] = {
+  protected def combineSnapPoints(pts: Set[DataPoint[VisitData]]): Set[DataPoint[VisitData]] = {
     pts.groupBy(pt=>(pt.lat, pt.lng)).toList.map(p=>{
-      val totalVisits = p._2.map(_.visits).sum
-      val lastVisit = p._2.toList.sortBy(-_.lastVisit.getMillis).map(_.lastVisit).head
-      VPt(p._1._1, p._1._2, totalVisits, Some(lastVisit))
+      val totalVisits = p._2.map(pt=>pt.data.map(_.visits).getOrElse(0)).sum
+      val commonName = p._2.toList.flatMap(pt=>pt.data.map(_.name)).groupBy(n=>n).toList.sortBy(-_._2.size).map(_._1).headOption.getOrElse(p._1._1 + ", " + p._1._2)
+      val lastVisit = MapGrid.sortPointsByRecent(p._2).headOption.flatMap(pt=>pt.data.map(_.lastVisit)).getOrElse(new DateTime)
+      DataPoint(p._1._1, p._1._2, Some(VisitData(totalVisits, commonName, lastVisit)))
     }).toSet
   }
 
-  def pointToRect(pt: VPt): Rectangle = {
+  def pointToRect[T](pt: DataPoint[T]): Rectangle = {
     new Rectangle(pt.lng, pt.lat, pt.lng+lngSnap, pt.lat+latSnap)
   }
 
-  protected def decomposeWorldMap(pts: List[VPt]): Set[Rectangle] = {
+  protected def decomposeWorldMap[T](pts: List[DataPoint[T]]): Set[Rectangle] = {
     val global = Rectangle(-180, -90, 180, 90)
     val rects = pts.map(pt=>pointToRect(pt))
     val decomp = Rectangle.decompose(List(global), rects, false)
@@ -187,7 +190,7 @@ case class MapGrid(latGridSizeInMeters: Int,
 }
 
 object MapGrid {
-  def sortPointsByVisits(pts: Set[VPt]): List[VPt] = pts.toList.sortBy(-_.visits)
-  def sortPointsByRecent(pts: Set[VPt]): List[VPt] = pts.toList.sortBy(-_.lastVisit.getMillis)
-  def sortPointsByLatLng(pts: Set[VPt]): List[VPt] = pts.toList.sortBy(p=>(p.lat, p.lng))
+  def sortPointsByVisits(pts: Set[DataPoint[VisitData]]): List[DataPoint[VisitData]] = pts.toList.sortBy(pt=>pt.data.map(-_.visits).getOrElse(0))
+  def sortPointsByRecent(pts: Set[DataPoint[VisitData]]): List[DataPoint[VisitData]] = pts.toList.sortBy(pt=>pt.data.map(-_.lastVisit.getMillis).getOrElse(0L))
+  def sortPointsByLatLng[T](pts: Set[DataPoint[T]]): List[DataPoint[T]] = pts.toList.sortBy(p=>(p.lat, p.lng))
 }

@@ -4,10 +4,10 @@ import net.liftweb.util.Helpers._
 import org.joda.time.DateTime
 import net.liftweb.common.Full
 import net.liftweb.http.js.{JsCmds, JsCmd, JE}
-import org.nfolkert.fssc.{VisitedPoints, Rectangle, MapGrid, Cluster, VPt}
 import org.scalafoursquare.auth.OAuthFlow
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
+import org.nfolkert.fssc.{VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
 
 object Session {
   object userToken extends SessionVar[Option[String]](None)
@@ -47,6 +47,11 @@ class StrategicFoursquare extends DispatchSnippet {
     val visitPoints = VisitedPoints.getVisitedPoints(token)
     val clusters = Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size)
 
+    def clusterName(cluster: Cluster[VisitData]): String = {
+      val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
+      grouped.map(_._1).headOption.getOrElse(cluster.anchor.lat + ", " + cluster.anchor.lng)
+    }
+
     if (!clusters.isEmpty) {
       var clusterIdx = 0
       var gridSize = 333
@@ -83,7 +88,8 @@ class StrategicFoursquare extends DispatchSnippet {
           <div>Points: {visitPoints.toString}</div>
           <div>Cluster: {cluster.toString}</div>
           <div>Overlays: {rects.toString}</div>
-         */
+        </div>
+        */
 
         val call = "renderMap(\n" +
           "[" + rects.map(_.toJson).join(",") + "],\n" +
@@ -96,7 +102,8 @@ class StrategicFoursquare extends DispatchSnippet {
       }
 
       val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
-      val clusterOpts = (1 to clusters.size).toList.map(idx => ((idx-1).toString, idx.toString)) ++ List(((-1).toString, "ALL"))
+
+      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
       def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
         // There is no lift ajax range slider; only a regular range slider.  Wah.

@@ -16,7 +16,7 @@ object VisitedPoints {
     new OAuthFlow(CLIENT_ID, CLIENT_SECRET, CLIENT_CALLBACK)
   }
 
-  def getVisitedPoints(token: String): Set[VPt] = {
+  def getVisitedPoints(token: String): Set[DataPoint[VisitData]] = {
     if (token == "test")
       sampleData
     else
@@ -26,11 +26,11 @@ object VisitedPoints {
 
   def sampleData() = {
     Set(
-      VPt(48.27, -101.28),
-      VPt(25.82, -80.28),
-      VPt(40.77, -73.98),
-      VPt(40.77, -73.985),
-      VPt(40.775, -73.98)
+      DataPoint[VisitData](48.27, -101.28, Some(VisitData(18, "Minot"))),
+      DataPoint[VisitData](25.82, -80.28, Some(VisitData(1, "Miami"))),
+      DataPoint[VisitData](40.77, -73.98, Some(VisitData(2, "Brooklyn"))),
+      DataPoint[VisitData](40.77, -73.985, Some(VisitData(1, "Brooklyn"))),
+      DataPoint[VisitData](40.775, -73.98, Some(VisitData(1, "New York")))
     )
   }
 
@@ -41,9 +41,12 @@ object VisitedPoints {
     venueHistory.response.map(r => {
       r.venues.items.flatMap(i => {
         val loc = i.venue.location
-        for {lat <- loc.lat; lng <- loc.lng} yield {VPt(lat, lng, i.beenHere)}
+        for {lat <- loc.lat; lng <- loc.lng} yield {
+          val name = loc.city.orElse(loc.state.orElse(loc.country)).getOrElse(lat + ", " + lng)
+          DataPoint(lat, lng, Some(VisitData(i.beenHere, name)))
+        }
       }).toSet
-    }).getOrElse(Set[VPt]())
+    }).getOrElse(Set[DataPoint[VisitData]]())
   }
 
   def getPointsFromCheckinHistory(token: String) = {
@@ -67,7 +70,10 @@ object VisitedPoints {
     checkinsList.flatMap(c=>{
       c.venue.flatMap(venue => {
         val loc = venue.location
-        for {lat <- loc.lat; lng <- loc.lng} yield {VPt(lat, lng, 1, Some(new DateTime(c.createdAt*1000L)))}
+        for {lat <- loc.lat; lng <- loc.lng} yield {
+          val name = loc.city.orElse(loc.state.orElse(loc.country)).getOrElse(lat + ", " + lng)
+          DataPoint(lat, lng, Some(VisitData(1, name, new DateTime(c.createdAt*1000L))))
+        }
       })
     }).toSet
   }
