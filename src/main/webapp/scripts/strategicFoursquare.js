@@ -81,6 +81,10 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity) {
     var opts = defaultOptions(map, rectBounds)
 
     rect.setOptions(opts)
+    google.maps.event.addListener(rect, 'click', function() {
+      infowindow.close()
+    });
+
     overlays.push(rect)
   }
 
@@ -126,6 +130,12 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity) {
         clickable: true,
         draggable: true
       })
+      google.maps.event.addListener(currPos, 'dragstart', function() {
+        infowindow.close()
+      });
+      google.maps.event.addListener(currPos, 'click', function() {
+        infowindow.close()
+      });
       google.maps.event.addListener(currPos, 'dragend', function() {
         var p = currPos.getPosition()
         $('#currentLatLng').val(p.lat() + ',' + p.lng()).blur()
@@ -147,4 +157,11 @@ function setupMap() {
     mapTypeId: google.maps.MapTypeId.ROADMAP
   };
   map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+  google.maps.event.addListener(map, 'click', function() {
+    infowindow.close()
+  });
+  google.maps.event.addListener(map, 'dragstart', function() {
+    infowindow.close()
+  });
+
 }

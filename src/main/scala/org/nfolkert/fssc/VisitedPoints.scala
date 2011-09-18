@@ -28,11 +28,11 @@ object VisitedPoints {
     val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
 
     val raw = app.multi(
-      app.exploreVenues(lat, lng, radius=Some(200)),
-      //app.exploreVenues(lat, lng, radius=Some(400)),
-      app.exploreVenues(lat, lng, radius=Some(750)),
-      //app.exploreVenues(lat, lng, radius=Some(1000)),
-      app.exploreVenues(lat, lng, radius=Some(5000))
+      app.exploreVenues(lat, lng, radius=Some(200), novelty=Some("new")),
+      //app.exploreVenues(lat, lng, radius=Some(400), novelty=Some("new")),
+      app.exploreVenues(lat, lng, radius=Some(750), novelty=Some("new")),
+      //app.exploreVenues(lat, lng, radius=Some(1000), novelty=Some("new")),
+      app.exploreVenues(lat, lng, radius=Some(5000), novelty=Some("new"))
     ).get
 
     def filterRecommendations(response: Option[Response[VenueExploreResponse]]) = {
