@@ -1,6 +1,7 @@
 package org.nfolkert.fssc
 
 import org.joda.time.DateTime
+import org.scalafoursquare.response.VenueCompact
 
 case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
   def distanceTo(pt: DataPoint[_]): Double = {
@@ -14,11 +15,18 @@ case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
 
 case class VisitData(visits: Int=0, name: String, lastVisit: DateTime=new DateTime) {}
 
+case class RecData(venue: VenueCompact) {}
+
 case class Rectangle(left: Double, bottom: Double, right: Double, top: Double) {
   def isEmpty = right <= left || top <= bottom
   def length = right - left
   def height = top - bottom
   def area = length * height
+
+  def contains(point: DataPoint[_]): Boolean = {
+    left <= point.lng && point.lng <= right &&
+    bottom <= point.lat && point.lat <= top
+  }
 
   def intersect(rect: Rectangle): Rectangle = {
     val minTop = math.min(rect.top, top)
