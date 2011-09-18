@@ -49,7 +49,7 @@ class StrategicFoursquare extends DispatchSnippet {
       })
     })
 
-    val visitPoints = VisitedPoints.getVisitedPoints(token)
+    val visitPoints = MapGrid.sortPointsByVisits(VisitedPoints.getVisitedPoints(token))
     val clusters = Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size)
 
     def clusterName(cluster: Cluster[VisitData]): String = {
@@ -66,7 +66,7 @@ class StrategicFoursquare extends DispatchSnippet {
 
       def generateCall(resetZoom: Boolean) = {
         val cluster = if (clusterIdx < 0) {
-          Cluster(visitPoints.toList(0), visitPoints)
+          Cluster(visitPoints(0), visitPoints.toSet)
         } else
           clusters(clusterIdx)
         val pts = cluster.pts
@@ -158,7 +158,7 @@ class StrategicFoursquare extends DispatchSnippet {
              })._2.toJsCmd
              <script type="text/javascript">{call}</script>
            },
-           "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full("0"), (newCluster) => {
+           "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
              clusterIdx = tryo(newCluster.toInt).openOr(0)
              generateCall(true)
            }),

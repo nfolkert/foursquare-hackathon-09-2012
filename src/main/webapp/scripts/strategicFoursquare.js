@@ -3,6 +3,14 @@ var recs = []
 var currPos;
 var map;
 
+var infowindow = new google.maps.InfoWindow({disableAutoPan: true})
+/*
+google.maps.event.addListener(marker, 'click', function() {
+  infowindow.open(map, marker);
+});
+*/
+
+
 // Sticky Options
 var stickyDefaults = {
   strokeColor: "#FF0000",
@@ -83,15 +91,31 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity) {
 
   for (var i = 0; i < inRecs.length; i++) {
     var r = inRecs[i]
-    var marker = new google.maps.Marker({
-      position: new google.maps.LatLng(r.lat, r.lng),
-      map: map,
-      icon: r.catIcon,
-      title: r.name + ((r.catName) ? ": " + r.catName : "") + ((r.address) ? " @" + r.address : ""),
-      clickable: false,
-      draggable: false
-    })
-    recs.push(marker)
+    var generateMarker = function(r) {
+      var marker = new google.maps.Marker({
+        position: new google.maps.LatLng(r.lat, r.lng),
+        map: map,
+        icon: r.catIcon
+      })
+      var eventFn = function() {
+        var content = document.createElement("div")
+        var addLine = function(header, body, parent) {
+          if (body) {
+            var subdiv = document.createElement("div")
+            parent.appendChild(subdiv)
+            subdiv.appendChild(document.createTextNode(header + ": " + body))
+          }
+        }
+        addLine("Name", r.name, content)
+        addLine("Type", r.catName, content)
+        addLine("Address", r.address, content)
+        infowindow.setContent(content)
+        infowindow.open(map, marker);
+      }
+      google.maps.event.addListener(marker, 'click', eventFn);
+      recs.push(marker)
+    }
+    generateMarker(inRecs[i])
   }
 
   if (pos) {

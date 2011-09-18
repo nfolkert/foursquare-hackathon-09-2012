@@ -124,9 +124,8 @@ case class Cluster[T](anchor: DataPoint[T], pts: Set[DataPoint[T]]) {
 }
 
 object Cluster {
-  def buildClusters[T](pts: Set[DataPoint[T]], clusterRad: Double = 40000.0): Set[Cluster[T]] = {
+  def buildClusters[T](pts: List[DataPoint[T]], clusterRad: Double = 40000.0): Set[Cluster[T]] = {
     val setup: scala.collection.mutable.Set[(DataPoint[T], scala.collection.mutable.Set[DataPoint[T]])] = scala.collection.mutable.Set()
-
     pts.map(pt=>{
       val closest = setup.map(c => (c, c._1.distanceTo(pt))).filter(_._2 < clusterRad).toList.sortBy(_._2).map(_._1).headOption
       closest.map(p => p._2.add(pt)).getOrElse({
