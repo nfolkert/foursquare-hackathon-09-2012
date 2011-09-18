@@ -4,7 +4,7 @@ import org.scalafoursquare.call.{HttpCaller, AuthApp}
 import net.liftweb.util.Props
 import org.joda.time.DateTime
 import org.scalafoursquare.auth.OAuthFlow
-import org.scalafoursquare.response.{VenueCompact, VenueLocation, CheckinForFriend}
+import org.scalafoursquare.response.{Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
 
 object VisitedPoints {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -24,12 +24,36 @@ object VisitedPoints {
     // getPointsFromCheckinHistory(token)
   }
 
-  def getRecommendedPoints(lat: Double, lng: Double, radius: Int, filters: Set[Rectangle], token: String): Set[DataPoint[RecData]] = {
+  def getRecommendedPoints(lat: Double, lng: Double, filters: Set[Rectangle], token: String): Set[DataPoint[RecData]] = {
     val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
-    val recs: List[VenueCompact] =
-      app.exploreVenues(lat, lng, radius=Some(radius)).get.response.flatMap(_.groups.find(_.`type` == "recommended")).map(_.items.map(_.venue)).getOrElse(Nil)
-    val points: List[DataPoint[RecData]] = recs.flatMap(v=>for {lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
-    points.filter(pt=>filters.find(_.contains(pt)).isDefined).toSet
+
+    val raw = app.multi(
+      app.exploreVenues(lat, lng, radius=Some(200)),
+      //app.exploreVenues(lat, lng, radius=Some(400)),
+      app.exploreVenues(lat, lng, radius=Some(750)),
+      //app.exploreVenues(lat, lng, radius=Some(1000)),
+      app.exploreVenues(lat, lng, radius=Some(5000))
+    ).get
+
+    def filterRecommendations(response: Option[Response[VenueExploreResponse]]) = {
+      response.flatMap(_.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
+        val venues: List[VenueCompact] = veg.items.map(_.venue)
+        val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
+        points.filter(pt=>filters.find(_.contains(pt)).isDefined)
+          .map(p=>(p.distanceTo(lat, lng), p))
+      })).getOrElse(Nil)
+    }
+    val close = filterRecommendations(raw.responses._1).sortBy(_._1).map(_._2)
+    val mediumclose = Nil// filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
+    val medium = filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
+    val mediumfar = Nil// filterRecommendations(raw.responses._4).sortBy(_._1).map(_._2)
+    val far = filterRecommendations(raw.responses._3).sortBy(_._1).map(_._2)
+
+    (close.take(5) ++
+     mediumclose.take(5) ++
+     medium.take(5) ++
+     mediumfar.take(5) ++
+     far.take(5)).toSet
   }
 
   def sampleRec() = {

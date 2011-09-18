@@ -58,7 +58,7 @@ class StrategicFoursquare extends DispatchSnippet {
     }
 
     if (!clusters.isEmpty) {
-      var clusterIdx = clusters.length-1
+      var clusterIdx = 0//clusters.length-1
       var gridSize = 333
       var opacity = 1.0
       var currLatLng: Option[(Double, Double)] = None
@@ -83,7 +83,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val rects = Rectangle.sortByLeft(grid.decompose.toList)
         val recPts = currLatLng.map(p => {
           val (lat, lng) = p
-          VisitedPoints.getRecommendedPoints(lat, lng, 1000, rects.toSet, token).toList
+          VisitedPoints.getRecommendedPoints(lat, lng, rects.toSet, token).toList
         }).getOrElse(Nil)
 
         def recPointToJson(pt: DataPoint[RecData]): Option[String] = {

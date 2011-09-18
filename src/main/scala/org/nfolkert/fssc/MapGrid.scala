@@ -4,10 +4,15 @@ import org.joda.time.DateTime
 import org.scalafoursquare.response.VenueCompact
 
 case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
+
   def distanceTo(pt: DataPoint[_]): Double = {
-    val theta = lng - pt.lng
-    val distance = math.sin(math.toRadians(lat)) * math.sin(math.toRadians(pt.lat)) +
-                   math.cos(math.toRadians(lat)) * math.cos(math.toRadians(pt.lat)) * math.cos(math.toRadians(theta))
+    distanceTo(pt.lat, pt.lng)
+  }
+
+  def distanceTo(l: Double, g: Double): Double = {
+    val theta = lng - g
+    val distance = math.sin(math.toRadians(lat)) * math.sin(math.toRadians(l)) +
+                   math.cos(math.toRadians(lat)) * math.cos(math.toRadians(l)) * math.cos(math.toRadians(theta))
     return math.floor(6378100 * math.acos(distance))
   }
 
