@@ -64,7 +64,7 @@ class StrategicFoursquare extends DispatchSnippet {
       var currLatLng: Option[(Double, Double)] = None
       var showOverlayBorders = false
 
-      def generateCall(resetZoom: Boolean) = {
+      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = {
         val cluster = if (clusterIdx < 0) {
           Cluster(visitPoints(0), visitPoints.toSet)
         } else
@@ -120,12 +120,12 @@ class StrategicFoursquare extends DispatchSnippet {
         */
 
         val call = "renderMap(\n" +
-          "[" + rects.map(_.toJson).join(",") + "],\n" +
+          (if (redrawOverlays) "[" + rects.map(_.toJson).join(",") + "],\n" else "[],") +
           "[" + recPts.flatMap(pt=>recPointToJson(pt)).join(",") + "],\n" +
           currLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
           (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
           zoom + ", " +
-          opacity + ")"
+          opacity + "," + redrawOverlays + ")"
 
         JsCmds.SetHtml("debug", debug) &
         JsCmds.Run(call)
@@ -154,17 +154,17 @@ class StrategicFoursquare extends DispatchSnippet {
       bind("map", xhtml,
            "setup" -> {
              val call = SHtml.ajaxCall(JE.JsRaw(""), (ignored) => {
-               generateCall(true)
+               generateCall(true, true)
              })._2.toJsCmd
              <script type="text/javascript">{call}</script>
            },
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
              clusterIdx = tryo(newCluster.toInt).openOr(0)
-             generateCall(true)
+             generateCall(true, true)
            }),
            "gridsize" -%> SHtml.ajaxSelect(gridSizeOpts, Full("250"), (newVal) => {
              gridSize = tryo(newVal.toInt).openOr(gridSize)
-             generateCall(false)
+             generateCall(false, true)
            }),
            "opacity" -%> ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
              opacity = newVal
@@ -180,7 +180,7 @@ class StrategicFoursquare extends DispatchSnippet {
              if (asList.size == 2) {
                currLatLng = Some(asList(0), asList(1))
              }
-             generateCall(false)
+             generateCall(false, false)
            })
       )
     }

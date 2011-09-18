@@ -67,25 +67,28 @@ function updateLocation(lat, lng) {
   }
 }
 
-function renderMap(rects, inRecs, pos, center, zoom, opacity) {
+function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
+
+  if (redrawOverlays) {
   // Clear existing overlays
-  for (var i = 0; i < overlays.length; i++)
-    overlays[i].setMap(null)
-  overlays.length = 0
+    for (var i = 0; i < overlays.length; i++)
+      overlays[i].setMap(null)
+    overlays.length = 0
 
-  for (var i = 0; i < rects.length; i++) {
-    var r = rects[i]
-    var rectBounds = toBounds(r)
-    var rect = new google.maps.Rectangle();
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i]
+      var rectBounds = toBounds(r)
+      var rect = new google.maps.Rectangle();
 
-    var opts = defaultOptions(map, rectBounds)
+      var opts = defaultOptions(map, rectBounds)
 
-    rect.setOptions(opts)
-    google.maps.event.addListener(rect, 'click', function() {
-      infowindow.close()
-    });
+      rect.setOptions(opts)
+      google.maps.event.addListener(rect, 'click', function() {
+        infowindow.close()
+      });
 
-    overlays.push(rect)
+      overlays.push(rect)
+    }
   }
 
   // Clear existing recommendations
