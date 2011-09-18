@@ -24,12 +24,12 @@ object VisitedPoints {
     // getPointsFromCheckinHistory(token)
   }
 
-  def getRecommendedPoints(center: DataPoint[VisitData], radius: Int, filters: Set[Rectangle], token: String): Set[DataPoint[RecData]] = {
+  def getRecommendedPoints(lat: Double, lng: Double, radius: Int, filters: Set[Rectangle], token: String): Set[DataPoint[RecData]] = {
     val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
     val recs: List[VenueCompact] =
-      app.exploreVenues(center.lat, center.lng, radius=radius).get.response.flatMap(_.groups.find(_.`type` == "recommended")).map(_.items.map(_.venue)).getOrElse(Nil)
-    val points: List[DataPoint[RecData]] = recs.flatMap(v=>for {lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, RecData(v)))
-    points.filter(pt=>filters.find(_.contains(pt)).isDefined)
+      app.exploreVenues(lat, lng, radius=Some(radius)).get.response.flatMap(_.groups.find(_.`type` == "recommended")).map(_.items.map(_.venue)).getOrElse(Nil)
+    val points: List[DataPoint[RecData]] = recs.flatMap(v=>for {lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
+    points.filter(pt=>filters.find(_.contains(pt)).isDefined).toSet
   }
 
   def sampleRec() = {

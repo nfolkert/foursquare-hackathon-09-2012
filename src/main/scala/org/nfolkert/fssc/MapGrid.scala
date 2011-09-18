@@ -24,8 +24,7 @@ case class Rectangle(left: Double, bottom: Double, right: Double, top: Double) {
   def area = length * height
 
   def contains(point: DataPoint[_]): Boolean = {
-    left <= point.lng && point.lng <= right &&
-    bottom <= point.lat && point.lat <= top
+    left <= point.lng && point.lng <= right && bottom <= point.lat && point.lat <= top
   }
 
   def intersect(rect: Rectangle): Rectangle = {
@@ -189,11 +188,15 @@ case class MapGrid(latGridSizeInMeters: Int,
     // decomp.toSet
   }
 
-  def decompose: Set[Rectangle] = {
+  lazy val decompose: Set[Rectangle] = {
     val snapped = snapPoints(points)
     val combined = combineSnapPoints(snapped)
     val sorted = MapGrid.sortPointsByLatLng(combined)
     decomposeWorldMap(sorted)
+  }
+
+  def nearby: Set[Rectangle] = {
+    decompose
   }
 }
 

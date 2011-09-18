@@ -1,4 +1,6 @@
 var overlays = []
+var recs = []
+var currPos;
 var map;
 
 // Sticky Options
@@ -8,7 +10,7 @@ var stickyDefaults = {
   strokeWeight: 0,
   fillColor: "#000000",
   fillOpacity: 1.0,
-  zIndex: 10,
+  zIndex: 0
 }
 
 
@@ -19,14 +21,14 @@ function toBounds(r) {
 
 function defaultOptions(map, rectBounds) {
   return {
-      strokeColor: stickyDefaults.strokeColor,
-      strokeOpacity: stickyDefaults.strokeOpacity,
-      strokeWeight: stickyDefaults.strokeWeight,
-      fillColor: stickyDefaults.fillColor,
-      fillOpacity: stickyDefaults.fillOpacity,
-      map: map,
-      zIndex: stickyDefaults.zIndex,
-      bounds: rectBounds
+    strokeColor: stickyDefaults.strokeColor,
+    strokeOpacity: stickyDefaults.strokeOpacity,
+    strokeWeight: stickyDefaults.strokeWeight,
+    fillColor: stickyDefaults.fillColor,
+    fillOpacity: stickyDefaults.fillOpacity,
+    map: map,
+    zIndex: stickyDefaults.zIndex,
+    bounds: rectBounds
   }
 }
 
@@ -52,7 +54,12 @@ function updateRects() {
   }
 }
 
-function renderMap(rects, center, zoom, opacity) {
+function updateLocation(lat, lng) {
+  if (!currPos) {
+  }
+}
+
+function renderMap(rects, inRecs, pos, center, zoom, opacity) {
   // Clear existing overlays
   for (var i = 0; i < overlays.length; i++)
     overlays[i].setMap(null)
@@ -68,6 +75,41 @@ function renderMap(rects, center, zoom, opacity) {
     rect.setOptions(opts)
     overlays.push(rect)
   }
+
+  // Clear existing recommendations
+  for (var i = 0; i < recs.length; i++)
+    recs[i].setMap(null)
+  recs.length = 0
+
+  for (var i = 0; i < inRecs.length; i++) {
+    var r = inRecs[i]
+    var marker = new google.maps.Marker({
+      position: new google.maps.LatLng(r.lat, r.lng),
+      map: map,
+      icon: r.catIcon,
+      title: r.name + ((r.catName) ? ": " + r.catName : "") + ((r.address) ? " @" + r.address : ""),
+      clickable: false,
+      draggable: false
+    })
+    recs.push(marker)
+  }
+
+  if (pos) {
+    if (!currPos) {
+      currPos = new google.maps.Marker({
+        position: new google.maps.LatLng(pos[0], pos[1]),
+        map: map,
+        clickable: true,
+        draggable: true
+      })
+      google.maps.event.addListener(currPos, 'dragend', function() {
+        var p = currPos.getPosition()
+        $('#currentLatLng').val(p.lat() + ',' + p.lng()).blur()
+      });
+    }
+    else currPos.setPosition(new google.maps.LatLng(pos[0], pos[1]))
+  }
+
   if (center) {
     map.setZoom(zoom)
     map.panTo(new google.maps.LatLng(center[0], center[1]))

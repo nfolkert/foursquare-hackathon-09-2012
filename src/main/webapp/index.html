@@ -7,14 +7,21 @@
     <script src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
     <script src="/scripts/strategicFoursquare.js"></script>
     <script type="text/javascript">
-$(document).ready(function() {
-  setupMap()
-  document.getElementById('clusterSelect').onchange();
-})
+      $(document).ready(function() {
+        setupMap()
+        /* // Use this approach for mobile; not as useful on web
+        if (navigator.geolocation)
+          navigator.geolocation.getCurrentPosition(function(position) {
+            var lat = position.coords.latitude
+            var lng = position.coords.longitude
+            $('#currentLatLng').val(lat + ',' + lng).blur()
+        })
+        */
+        document.getElementById('clusterSelect').onchange();
+      })
     </script>
   </head>
   <body>
-    <!-- map:setup/ -->
     <div>
       <div id="map_canvas" style="width:500px; height:500px"></div>
     </div>
@@ -25,6 +32,7 @@ $(document).ready(function() {
       <div>Opacity: <map:opacity/></div>
       <div>Overlay Borders: <map:overlayborders/></div>
       <div>Logout: <map:logout/></div>
+      <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
     </div>
     <div id="debug"></div>
   </body>

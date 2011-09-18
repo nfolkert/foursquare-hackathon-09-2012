@@ -7,13 +7,17 @@ import net.liftweb.http.js.{JsCmds, JsCmd, JE}
 import org.scalafoursquare.auth.OAuthFlow
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
-import org.nfolkert.fssc.{VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
+import org.nfolkert.fssc.{RecData, VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
+import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
 
 object Session {
   object userToken extends SessionVar[Option[String]](None)
 }
 
+case class RecVenue(name: String, lat: Double, lng: Double, catIcon: Option[String], catName: Option[String], address: Option[String])
+
 class StrategicFoursquare extends DispatchSnippet {
+  implicit val formats = DefaultFormats
 
   def dispatch: DispatchIt = {
     case "renderMap" => renderMap _
@@ -54,9 +58,10 @@ class StrategicFoursquare extends DispatchSnippet {
     }
 
     if (!clusters.isEmpty) {
-      var clusterIdx = 0
+      var clusterIdx = clusters.length-1
       var gridSize = 333
       var opacity = 1.0
+      var currLatLng: Option[(Double, Double)] = None
       var showOverlayBorders = false
 
       def generateCall(resetZoom: Boolean) = {
@@ -66,6 +71,9 @@ class StrategicFoursquare extends DispatchSnippet {
           clusters(clusterIdx)
         val pts = cluster.pts
         val bounds = cluster.bounds
+        if (currLatLng.isEmpty || resetZoom) {
+          currLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+        }
 
         val grid = MapGrid(gridSize, 1.5, pts)
         val sw = grid.snapPoint(bounds._1)
@@ -73,6 +81,24 @@ class StrategicFoursquare extends DispatchSnippet {
         val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
         val rects = Rectangle.sortByLeft(grid.decompose.toList)
+        val recPts = currLatLng.map(p => {
+          val (lat, lng) = p
+          VisitedPoints.getRecommendedPoints(lat, lng, 1000, rects.toSet, token).toList
+        }).getOrElse(Nil)
+
+        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
+          pt.data.flatMap(d => {
+            val cat = d.venue.categories.find(_.primary.getOrElse(false))
+            val catIcon = cat.map(_.icon)
+            val catName = cat.map(_.name)
+            val name = d.venue.name
+            val address = d.venue.location.address
+            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
+              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              Printer.compact(JsonAST.render(json))
+            }
+          })
+        }
 
         val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
         val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
@@ -81,6 +107,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val zoom = math.max(1, 18 - (eqScale-2))
 
         val debug = <div>
+          <div>Current Position: {currLatLng.map(_.toString).getOrElse("Unknown")}</div>
           <div>Total Point Count: {visitPoints.size}</div>
           <div>Cluster Point Count: {pts.size}</div>
           <div>Overlay Count: {rects.size}</div>
@@ -94,6 +121,8 @@ class StrategicFoursquare extends DispatchSnippet {
 
         val call = "renderMap(\n" +
           "[" + rects.map(_.toJson).join(",") + "],\n" +
+          "[" + recPts.flatMap(pt=>recPointToJson(pt)).join(",") + "],\n" +
+          currLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
           (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
           zoom + ", " +
           opacity + ")"
@@ -145,7 +174,14 @@ class StrategicFoursquare extends DispatchSnippet {
              showOverlayBorders = newVal
              JsCmds.Run("showBorders(" + showOverlayBorders + ")")
            }),
-           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo(url)})
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo(url)}),
+           "currentlatlng" -%> SHtml.ajaxText("", (newVal)=>{
+             val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+             if (asList.size == 2) {
+               currLatLng = Some(asList(0), asList(1))
+             }
+             generateCall(false)
+           })
       )
     }
     else
