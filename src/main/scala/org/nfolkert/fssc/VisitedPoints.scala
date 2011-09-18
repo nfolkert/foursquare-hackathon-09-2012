@@ -3,8 +3,8 @@ package org.nfolkert.fssc
 import org.scalafoursquare.call.{HttpCaller, AuthApp}
 import net.liftweb.util.Props
 import org.joda.time.DateTime
-import org.scalafoursquare.response.{VenueLocation, CheckinForFriend}
 import org.scalafoursquare.auth.OAuthFlow
+import org.scalafoursquare.response.{VenueCompact, VenueLocation, CheckinForFriend}
 
 object VisitedPoints {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -18,13 +18,25 @@ object VisitedPoints {
 
   def getVisitedPoints(token: String): Set[DataPoint[VisitData]] = {
     if (token == "test")
-      sampleData
+      sampleVisits
     else
       getPointsFromVenueHistory(token)
     // getPointsFromCheckinHistory(token)
   }
 
-  def sampleData() = {
+  def getRecommendedPoints(center: DataPoint[VisitData], radius: Int, filters: Set[Rectangle], token: String): Set[DataPoint[RecData]] = {
+    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
+    val recs: List[VenueCompact] =
+      app.exploreVenues(center.lat, center.lng, radius=radius).get.response.flatMap(_.groups.find(_.`type` == "recommended")).map(_.items.map(_.venue)).getOrElse(Nil)
+    val points: List[DataPoint[RecData]] = recs.flatMap(v=>for {lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, RecData(v)))
+    points.filter(pt=>filters.find(_.contains(pt)).isDefined)
+  }
+
+  def sampleRec() = {
+    Set[DataPoint[RecData]]()
+  }
+
+  def sampleVisits() = {
     Set(
       DataPoint[VisitData](48.27, -101.28, Some(VisitData(18, "Minot"))),
       DataPoint[VisitData](25.82, -80.28, Some(VisitData(1, "Miami"))),
