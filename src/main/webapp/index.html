@@ -1,39 +1,18 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:lift="http://liftweb.net"
-      class="lift:StrategicFoursquare.renderMap">
+      class="lift:StrategicFoursquare.welcome">
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
-    <script src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
-    <script src="/scripts/strategicFoursquare.js"></script>
-    <script type="text/javascript">
-      $(document).ready(function() {
-        setupMap()
-        /* // Use this approach for mobile; not as useful on web
-        if (navigator.geolocation)
-          navigator.geolocation.getCurrentPosition(function(position) {
-            var lat = position.coords.latitude
-            var lng = position.coords.longitude
-            $('#currentLatLng').val(lat + ',' + lng).blur()
-        })
-        */
-        document.getElementById('clusterSelect').onchange();
-      })
-    </script>
   </head>
   <body>
     <div>
-      <div id="map_canvas" style="width:500px; height:500px"></div>
+      <h3>Strategic 4Sq</h3>
+      <div>I wanted to see a view of my foursquare check-ins that represented territory covered rather than
+        venues visited.  Inspired by the "fog of war" map view of the old-school Mac game Strategic Conquest,
+        I bring you Strategic 4Sq.</div>
+      <img src="images/strategic_4sq.png"/>
+      <auth:link>Authorize with Foursquare</auth:link>
     </div>
-    <div>
-      <h3>Controls</h3>
-      <div>Cluster: <map:cluster id="clusterSelect"/></div>
-      <div>Grid Size: <map:gridsize/></div>
-      <div>Opacity: <map:opacity/></div>
-      <div>Overlay Borders: <map:overlayborders/></div>
-      <div>Logout: <map:logout/></div>
-      <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
-    </div>
-    <div id="debug"></div>
   </body>
 </html>

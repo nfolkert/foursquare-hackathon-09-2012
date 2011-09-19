@@ -21,34 +21,35 @@ class StrategicFoursquare extends DispatchSnippet {
 
   def dispatch: DispatchIt = {
     case "renderMap" => renderMap _
+    case "welcome" => welcome _
     case _ => renderMap _
   }
 
-  def renderMap(xhtml: NodeSeq): NodeSeq = {
+  def welcome(xhtml: NodeSeq): NodeSeq = {
     val url = S.uri
-    
-    // Finding user token
-    val token = Session.userToken.is.getOrElse({
-      val oauth = VisitedPoints.oauth
-      // Are we on return from an oauth call?
-      S.param("code").flatMap(code=>{
-        tryo(oauth.accessTokenCaller(code).get)
-      }).map(t=>{Session.userToken(Some(t)); S.redirectTo(url)}).getOrElse({
-        // Are we in testing mode?
-        // TODO - check params; use either test data, or lookup based on test token in props
-        S.param("test").map(p=>{
-          if (p == "token")
-            VisitedPoints.AUTH_TOKEN
-          else
-            "test"
-        }).openOr({
-          // Otherwise call the authorize url
-          val url = oauth.authorizeUrl
-          S.redirectTo(url)
-        })
+
+    if (Session.userToken.is.isDefined) S.redirectTo("/map")
+
+    val oauth = VisitedPoints.oauth
+    S.param("code").flatMap(code=>{
+      tryo(oauth.accessTokenCaller(code).get)
+    }).map(t=>{Session.userToken(Some(t)); S.redirectTo("/map")}).getOrElse({
+      S.param("test").map(p=>{
+        Session.userToken(Some(p)); S.redirectTo("/map")
+      }).getOrElse({
+        def renderLink(xhtml: NodeSeq): NodeSeq = {
+          <a href={oauth.authorizeUrl}>{xhtml}</a>
+        }
+
+        bind("auth", xhtml,
+             "link" -%> renderLink _)
       })
     })
+  }
 
+  def renderMap(xhtml: NodeSeq): NodeSeq = {
+    val token = (Session.userToken.is.getOrElse(S.redirectTo("/")))
+    
     val visitPoints = MapGrid.sortPointsByVisits(VisitedPoints.getVisitedPoints(token))
     val clusters = Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size)
 
@@ -174,7 +175,7 @@ class StrategicFoursquare extends DispatchSnippet {
              showOverlayBorders = newVal
              JsCmds.Run("showBorders(" + showOverlayBorders + ")")
            }),
-           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo(url)}),
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo("/")}),
            "currentlatlng" -%> SHtml.ajaxText("", (newVal)=>{
              val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
              if (asList.size == 2) {
