@@ -21,19 +21,34 @@
       })
     </script>
   </head>
-  <body>
-    <div>
-      <div id="map_canvas" style="width:500px; height:500px"></div>
+  <body style="font-family:Helvetica, Verdana, Arial, sans-serif; text-align:center">
+    <div style="font-size:80%; text-decoration:italic; color:#777">
+      <div>
+        Map regions are revealed as you check in to venues in the concealed areas.
+      </div>
+      <div>
+        Drag the placemark to a region you would like to explore, and foursquare will find recommended places in
+        the areas you have yet to explore.
+      </div>
+      <br/>
     </div>
     <div>
-      <h3>Controls</h3>
-      <div>Cluster: <map:cluster id="clusterSelect"/></div>
-      <div>Grid Size: <map:gridsize/></div>
-      <div>Opacity: <map:opacity/></div>
-      <div>Overlay Borders: <map:overlayborders/></div>
-      <div>Logout: <map:logout/></div>
-      <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
+      <div id="map_canvas" style="width:1000px; height:550px; display:block; margin-left:auto; margin-right:auto"></div>
     </div>
-    <div id="debug"></div>
+    <br/>
+    <div>
+      <div>
+        <table style="text-align:left; margin-left:auto; margin-right:auto; width:300px; background-color:#CCC; font-size:10px">
+          <tr><td colspan="2" style="background-color:#EEE; text-align:center"><h3>Controls</h3></td></tr>
+          <tr><td>Cluster</td><td><map:cluster id="clusterSelect"/></td></tr>
+          <tr><td>Grid Size</td><td><map:gridsize/></td></tr>
+          <tr><td>Opacity</td><td><map:opacity/></td></tr>
+          <tr><td>Overlay Borders</td><td><map:overlayborders/></td></tr>
+          <tr><td>Logout</td><td><map:logout/></td></tr>
+        </table>
+        <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
+      </div>
+    </div>
+    <!-- div id="debug"></div -->
   </body>
 </html>
