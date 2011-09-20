@@ -15,7 +15,7 @@ class ScalaFoursquareProject(info: ProjectInfo) extends DefaultWebProject(info) 
 
   val liftMongo       = "net.liftweb" %% "lift-mongodb" % liftVer % "compile" withSources() intransitive()
   val liftMongoRecord = "net.liftweb" %% "lift-mongodb-record" % liftVer % "compile" withSources() intransitive()
-  val mongo        = "org.mongodb" % "mongo-java-driver" % "2.5.3a_fs" withSources()
+  val mongo = "org.mongodb" % "mongo-java-driver" % "2.6.5" withSources()
 
   val scalajCollection = "org.scalaj" %% "scalaj-collection" % "1.1"
   val scalajHttp = "org.scalaj" %% "scalaj-http" % "0.2.8" % "compile" withSources()
