@@ -2,27 +2,29 @@ package org.nfolkert.snippet
 
 import net.liftweb.util.Helpers._
 import org.joda.time.DateTime
-import net.liftweb.common.Full
 import net.liftweb.http.js.{JsCmds, JsCmd, JE}
 import org.scalafoursquare.auth.OAuthFlow
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
 import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
-import org.nfolkert.fssc.{Game, RecData, VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
+import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
 import org.nfolkert.fssc.model.User
 import net.liftweb.util.Props
+import net.liftweb.common.{Loggable, Full}
+import org.nfolkert.lib.T
 
-object Session {
+object Session extends Loggable {
   object userToken extends SessionVar[Option[String]](None)
   object user extends SessionVar[Option[User]](None)
 
   def setup(key: String) {
     val token = if (key == "token") Props.get("access.token.user").getOrElse("test") else key
+    logger.info("Setting session token to " + token)
     Session.userToken(Some(token))
     if (token == "test")
       Session.user(Some(User.createRecord.id("-1")))
     else
-      Session.user(VisitedPoints.getUser(token))
+      Session.user(UserData.getUser(token))
   }
 
   def clear() {
@@ -42,12 +44,12 @@ class StrategicFoursquare extends DispatchSnippet {
     case _ => renderMap _
   }
 
-  def welcome(xhtml: NodeSeq): NodeSeq = {
+  def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
     val url = S.uri
 
     if (Session.userToken.is.isDefined) S.redirectTo("/map")
 
-    val oauth = VisitedPoints.oauth
+    val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
     }).map(t=>{Session.setup(t); S.redirectTo("/map")}).getOrElse({
@@ -64,11 +66,12 @@ class StrategicFoursquare extends DispatchSnippet {
     })
   }
 
-  def renderMap(xhtml: NodeSeq): NodeSeq = {
+  def renderMap(xhtml: NodeSeq): NodeSeq = T("Render Map") {
     val token = (Session.userToken.is.getOrElse(S.redirectTo("/")))
+    val user = (Session.user.is.getOrElse(User.createRecord.id("-1")))
     
-    val visitPoints = MapGrid.sortPointsByVisits(VisitedPoints.getVisitedPoints(token))
-    val clusters = Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size)
+    val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+    val clusters = T("Build Clusters") { Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size) }
 
     def clusterName(cluster: Cluster[VisitData]): String = {
       val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
@@ -82,7 +85,7 @@ class StrategicFoursquare extends DispatchSnippet {
       var currLatLng: Option[(Double, Double)] = None
       var showOverlayBorders = false
 
-      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = {
+      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
         val cluster = if (clusterIdx < 0) {
           Cluster(visitPoints(0), visitPoints.toSet)
         } else
@@ -98,11 +101,11 @@ class StrategicFoursquare extends DispatchSnippet {
         val ne = grid.snapPoint(bounds._2)
         val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
-        val rects = Rectangle.sortByLeft(grid.decompose.toList)
-        val covered = grid.covered
+        val covered = T("Covered Cells") { grid.covered }
+        val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
         val recPts = currLatLng.map(p => {
           val (lat, lng) = p
-          VisitedPoints.getRecommendedPoints(lat, lng, rects.toSet, token).toList
+          UserData.getRecommendedPoints(lat, lng, rects.toSet, token).toList
         }).getOrElse(Nil)
 
         def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
@@ -140,9 +143,12 @@ class StrategicFoursquare extends DispatchSnippet {
 
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
+        def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+
         val call = "renderMap(\n" +
-          (if (redrawOverlays) "[" + rects.map(_.toJson).join(",") + "],\n" else "[],") +
-          "[" + recPts.flatMap(pt=>recPointToJson(pt)).join(",") + "],\n" +
+          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
+          "[" + recommendationsJson + "],\n" +
           currLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
           (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
           zoom + ", " +
