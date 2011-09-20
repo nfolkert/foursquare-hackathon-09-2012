@@ -184,19 +184,22 @@ case class MapGrid(latGridSizeInMeters: Int,
     new Rectangle(pt.lng, pt.lat, pt.lng+lngSnap, pt.lat+latSnap)
   }
 
-  protected def decomposeWorldMap[T](pts: List[DataPoint[T]]): Set[Rectangle] = {
+  protected def decomposeWorldMap[T](rects: List[Rectangle]): Set[Rectangle] = {
     val global = Rectangle(-180, -90, 180, 90)
-    val rects = pts.map(pt=>pointToRect(pt))
     val decomp = Rectangle.decompose(List(global), rects, false)
     Rectangle.merge(decomp).toSet
     // decomp.toSet
   }
 
-  lazy val decompose: Set[Rectangle] = {
+  lazy val covered: List[Rectangle] = {
     val snapped = snapPoints(points)
     val combined = combineSnapPoints(snapped)
     val sorted = MapGrid.sortPointsByLatLng(combined)
-    decomposeWorldMap(sorted)
+    sorted.map(pt=>pointToRect(pt))
+  }
+
+  lazy val decompose: Set[Rectangle] = {
+    decomposeWorldMap(covered)
   }
 
   def nearby: Set[Rectangle] = {

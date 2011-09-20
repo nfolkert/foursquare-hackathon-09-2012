@@ -7,8 +7,8 @@ import net.liftweb.http.js.{JsCmds, JsCmd, JE}
 import org.scalafoursquare.auth.OAuthFlow
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
-import org.nfolkert.fssc.{RecData, VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
 import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
+import org.nfolkert.fssc.{Game, RecData, VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
 
 object Session {
   object userToken extends SessionVar[Option[String]](None)
@@ -82,6 +82,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
         val rects = Rectangle.sortByLeft(grid.decompose.toList)
+        val covered = grid.covered
         val recPts = currLatLng.map(p => {
           val (lat, lng) = p
           VisitedPoints.getRecommendedPoints(lat, lng, rects.toSet, token).toList
@@ -120,6 +121,8 @@ class StrategicFoursquare extends DispatchSnippet {
         </div>
         */
 
+        val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+
         val call = "renderMap(\n" +
           (if (redrawOverlays) "[" + rects.map(_.toJson).join(",") + "],\n" else "[],") +
           "[" + recPts.flatMap(pt=>recPointToJson(pt)).join(",") + "],\n" +
@@ -128,6 +131,9 @@ class StrategicFoursquare extends DispatchSnippet {
           zoom + ", " +
           opacity + "," + redrawOverlays + ")"
 
+        val showScore = "renderScore(" + score.visited + "," + score.total + ")"
+        JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
+        JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
         JsCmds.SetHtml("debug", debug) &
         JsCmds.Run(call)
       }
