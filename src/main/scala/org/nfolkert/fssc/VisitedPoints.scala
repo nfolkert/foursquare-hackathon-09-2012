@@ -1,5 +1,6 @@
 package org.nfolkert.fssc
 
+import model.User
 import org.scalafoursquare.call.{HttpCaller, AuthApp}
 import net.liftweb.util.Props
 import org.joda.time.DateTime
@@ -14,6 +15,13 @@ object VisitedPoints {
 
   def oauth = {
     new OAuthFlow(CLIENT_ID, CLIENT_SECRET, CLIENT_CALLBACK)
+  }
+
+  def getUser(token: String): Option[User] = {
+    val app = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=5000), token)
+    app.self.get.response.map(resp=>{
+      User.findOrCreate(resp.user)
+    })
   }
 
   def getVisitedPoints(token: String): Set[DataPoint[VisitData]] = {

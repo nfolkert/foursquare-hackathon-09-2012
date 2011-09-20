@@ -9,9 +9,26 @@ import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
 import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
 import org.nfolkert.fssc.{Game, RecData, VisitData, VisitedPoints, Rectangle, MapGrid, Cluster, DataPoint}
+import org.nfolkert.fssc.model.User
+import net.liftweb.util.Props
 
 object Session {
   object userToken extends SessionVar[Option[String]](None)
+  object user extends SessionVar[Option[User]](None)
+
+  def setup(key: String) {
+    val token = if (key == "token") Props.get("access.token.user").getOrElse("test") else key
+    Session.userToken(Some(token))
+    if (token == "test")
+      Session.user(Some(User.createRecord.id("-1")))
+    else
+      Session.user(VisitedPoints.getUser(token))
+  }
+
+  def clear() {
+    Session.userToken.remove
+    Session.user.remove
+  }
 }
 
 case class RecVenue(name: String, lat: Double, lng: Double, catIcon: Option[String], catName: Option[String], address: Option[String])
@@ -33,9 +50,9 @@ class StrategicFoursquare extends DispatchSnippet {
     val oauth = VisitedPoints.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
-    }).map(t=>{Session.userToken(Some(t)); S.redirectTo("/map")}).getOrElse({
+    }).map(t=>{Session.setup(t); S.redirectTo("/map")}).getOrElse({
       S.param("test").map(p=>{
-        Session.userToken(Some(p)); S.redirectTo("/map")
+        Session.setup(p); S.redirectTo("/map")
       }).getOrElse({
         def renderLink(xhtml: NodeSeq): NodeSeq = {
           <a href={oauth.authorizeUrl}>{xhtml}</a>
@@ -181,7 +198,7 @@ class StrategicFoursquare extends DispatchSnippet {
              showOverlayBorders = newVal
              JsCmds.Run("showBorders(" + showOverlayBorders + ")")
            }),
-           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.userToken.remove(); JsCmds.RedirectTo("/")}),
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
            "currentlatlng" -%> SHtml.ajaxText("", (newVal)=>{
              val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
              if (asList.size == 2) {

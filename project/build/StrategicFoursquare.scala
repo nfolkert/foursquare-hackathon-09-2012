@@ -4,7 +4,7 @@ class ScalaFoursquareProject(info: ProjectInfo) extends DefaultWebProject(info) 
   override def managedStyle = ManagedStyle.Maven
   override def packageSrcJar= defaultJarPath("-sources.jar")
 
-  val liftVer = "2.4-M1"
+  val liftVer = "2.4-M2"
 
   val liftWebkit = "net.liftweb" %% "lift-webkit" % liftVer % "compile->default" withSources()
   val liftMapper = "net.liftweb" %% "lift-mapper" % liftVer % "compile->default"
@@ -13,7 +13,8 @@ class ScalaFoursquareProject(info: ProjectInfo) extends DefaultWebProject(info) 
   val liftUtil = "net.liftweb" %% "lift-util" % liftVer % "compile" withSources()
   val liftJson = "net.liftweb" %% "lift-json" % liftVer % "compile" withSources()
 
-  val liftMongo       = "net.liftweb" %% "lift-mongodb" % liftVer % "compile" withSources() intransitive()
+  val liftRecord = "net.liftweb" %% "lift-record" % liftVer % "compile" withSources()
+  val liftMongo = "net.liftweb" %% "lift-mongodb" % liftVer % "compile" withSources() intransitive()
   val liftMongoRecord = "net.liftweb" %% "lift-mongodb-record" % liftVer % "compile" withSources() intransitive()
   val mongo = "org.mongodb" % "mongo-java-driver" % "2.6.5" withSources()
 
