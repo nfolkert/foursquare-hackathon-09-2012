@@ -8,10 +8,10 @@ import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
 import xml.{Elem, Unparsed, NodeSeq, Text}
 import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
 import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
-import org.nfolkert.fssc.model.User
 import net.liftweb.util.Props
 import net.liftweb.common.{Loggable, Full}
 import org.nfolkert.lib.T
+import org.nfolkert.fssc.model.{UserVenueHistory, User}
 
 object Session extends Loggable {
   object userToken extends SessionVar[Option[String]](None)
@@ -71,7 +71,7 @@ class StrategicFoursquare extends DispatchSnippet {
     val user = (Session.user.is.getOrElse(User.createRecord.id("-1")))
     
     val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
-    val clusters = T("Build Clusters") { Cluster.buildClusters(visitPoints).toList.sortBy(-_.pts.size) }
+    val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
     def clusterName(cluster: Cluster[VisitData]): String = {
       val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
@@ -80,10 +80,11 @@ class StrategicFoursquare extends DispatchSnippet {
 
     if (!clusters.isEmpty) {
       var clusterIdx = 0//clusters.length-1
-      var gridSize = 333
+      var gridSize = 250
       var opacity = 1.0
       var currLatLng: Option[(Double, Double)] = None
       var showOverlayBorders = false
+      var recType = "none"
 
       def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
         val cluster = if (clusterIdx < 0) {
@@ -105,7 +106,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
         val recPts = currLatLng.map(p => {
           val (lat, lng) = p
-          UserData.getRecommendedPoints(lat, lng, rects.toSet, token).toList
+          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
         }).getOrElse(Nil)
 
         def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
@@ -163,6 +164,12 @@ class StrategicFoursquare extends DispatchSnippet {
 
       val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
 
+      val recommendationOpts = List(
+        ("none", "No Recommendations"),
+        ("food", "Food"), ("drinks", "Drinks"), ("coffee", "Coffee"), ("shops", "Shopping"), ("arts", "Arts and Entertainment"), ("outdoors", "Outdoors"),
+        ("all", "All Categories")
+      )
+
       val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
       def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
@@ -211,6 +218,24 @@ class StrategicFoursquare extends DispatchSnippet {
                currLatLng = Some(asList(0), asList(1))
              }
              generateCall(false, false)
+           }),
+           "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full("none"), (newVal) => {
+             recType = newVal
+             generateCall(false, false)
+           }),
+           "refreshdata" -%> SHtml.ajaxButton("Refresh", () => {
+             Session.user.is.map(user=>{
+               Session.setup(token)
+               UserData.fetchUserVenueHistory(user.id.value, token)
+               JsCmds.Alert("Data refreshed")
+             }).getOrElse(JsCmds.Noop)
+           }),
+           "deletedata" -%> SHtml.ajaxButton("Clear", () => {
+             Session.user.is.map(user=>{
+               UserVenueHistory.find(user.id.value).map(_.delete_!)
+               Session.clear;
+               JsCmds.RedirectTo("/")
+             }).getOrElse(JsCmds.Noop)
            })
       )
     }

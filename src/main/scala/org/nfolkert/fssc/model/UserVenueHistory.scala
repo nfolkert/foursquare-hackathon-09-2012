@@ -21,14 +21,15 @@ object UserVenueHistoryEntry {
       Option(obj.get("a").asInstanceOf[String]),
       Option(obj.get("c").asInstanceOf[String]),
       Option(obj.get("s").asInstanceOf[String]),
-      Option(obj.get("k").asInstanceOf[String])
+      Option(obj.get("k").asInstanceOf[String]),
+      Option(obj.get("y").asInstanceOf[String])
     )
   }
 }
 
 case class UserVenueHistoryEntry(venueId: String, name: String, lat: Double, lng: Double, beenHere: Int,
                                  address: Option[String], city: Option[String], state: Option[String],
-                                 country: Option[String]) {
+                                 country: Option[String], catId: Option[String]) {
   def serialize: DBObject = {
     val o = new BasicDBObjectBuilder()
       .add("i", venueId)
@@ -40,6 +41,7 @@ case class UserVenueHistoryEntry(venueId: String, name: String, lat: Double, lng
     city.map(v=>o.add("c", v))
     state.map(v=>o.add("s", v))
     country.map(v=>o.add("k", v))
+    catId.map(v=>o.add("y", v))
     o.get
   }
 }
@@ -116,6 +118,8 @@ object UserVenueHistory extends UserVenueHistory with MongoMetaRecord[UserVenueH
       val venueId = e.venue.id
       val venueName = e.venue.name
       val loc = e.venue.location
+      val catId = e.venue.categories.find(_.primary.getOrElse(false)).flatMap(c=>c.id)
+
       val beenHere = e.beenHere
       loc.address
 
@@ -124,8 +128,7 @@ object UserVenueHistory extends UserVenueHistory with MongoMetaRecord[UserVenueH
         lng <- loc.lng
       } yield {
         UserVenueHistoryEntry(venueId, venueName, lat, lng, beenHere,
-          loc.address, loc.city, loc.state, loc.country
-        )
+          loc.address, loc.city, loc.state, loc.country, catId)
 /*
         UserVenueHistoryEntry2.createRecord
           .name(venueName)

@@ -40,36 +40,45 @@ object UserData extends Loggable {
   def getRecommendedPoints(lat: Double,
                            lng: Double,
                            filters: Set[Rectangle],
+                           recType: String,
                            token: String): Set[DataPoint[RecData]] = T("Get Recommendations") {
-    val app = getApp(token)
+    if (recType == "none")
+      Set[DataPoint[RecData]]()
+    else {
+      val app = getApp(token)
+      val section = recType match {
+        case "all" => None;
+        case t => Some(t)
+      }
 
-    val raw = app.multi(
-      app.exploreVenues(lat, lng, radius=Some(200), novelty=Some("new")),
-      //app.exploreVenues(lat, lng, radius=Some(400), novelty=Some("new")),
-      app.exploreVenues(lat, lng, radius=Some(750), novelty=Some("new")),
-      //app.exploreVenues(lat, lng, radius=Some(1000), novelty=Some("new")),
-      app.exploreVenues(lat, lng, radius=Some(5000), novelty=Some("new"))
-    ).get
+      val raw = app.multi(
+        app.exploreVenues(lat, lng, radius=Some(200), novelty=Some("new"), section=section),
+        //app.exploreVenues(lat, lng, radius=Some(400), novelty=Some("new")),
+        app.exploreVenues(lat, lng, radius=Some(750), novelty=Some("new"), section=section),
+        //app.exploreVenues(lat, lng, radius=Some(1000), novelty=Some("new")),
+        app.exploreVenues(lat, lng, radius=Some(5000), novelty=Some("new"), section=section)
+      ).get
 
-    def filterRecommendations(response: Option[Response[VenueExploreResponse]]) = {
-      response.flatMap(_.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
-        val venues: List[VenueCompact] = veg.items.map(_.venue)
-        val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
-        points.filter(pt=>filters.find(_.contains(pt)).isDefined)
-          .map(p=>(p.distanceTo(lat, lng), p))
-      })).getOrElse(Nil)
+      def filterRecommendations(response: Option[Response[VenueExploreResponse]]) = {
+        response.flatMap(_.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
+          val venues: List[VenueCompact] = veg.items.map(_.venue)
+          val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
+          points.filter(pt=>filters.find(_.contains(pt)).isDefined)
+            .map(p=>(p.distanceTo(lat, lng), p))
+        })).getOrElse(Nil)
+      }
+      val close = filterRecommendations(raw.responses._1).sortBy(_._1).map(_._2)
+      val mediumclose = Nil// filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
+      val medium = filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
+      val mediumfar = Nil// filterRecommendations(raw.responses._4).sortBy(_._1).map(_._2)
+      val far = filterRecommendations(raw.responses._3).sortBy(_._1).map(_._2)
+
+      (close.take(5) ++
+       mediumclose.take(5) ++
+       medium.take(5) ++
+       mediumfar.take(5) ++
+       far.take(5)).toSet
     }
-    val close = filterRecommendations(raw.responses._1).sortBy(_._1).map(_._2)
-    val mediumclose = Nil// filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
-    val medium = filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
-    val mediumfar = Nil// filterRecommendations(raw.responses._4).sortBy(_._1).map(_._2)
-    val far = filterRecommendations(raw.responses._3).sortBy(_._1).map(_._2)
-
-    (close.take(5) ++
-     mediumclose.take(5) ++
-     medium.take(5) ++
-     mediumfar.take(5) ++
-     far.take(5)).toSet
   }
 
   def sampleRec() = {
@@ -115,7 +124,7 @@ object UserData extends Loggable {
             val orig = p._2
             merge.get(id).map(m => {
               UserVenueHistoryEntry(m.venueId, m.name, m.lat, m.lng,
-                orig.beenHere + m.beenHere, m.address, m.city, m.state, m.country)
+                orig.beenHere + m.beenHere, m.address, m.city, m.state, m.country, m.catId)
             }).getOrElse(orig)
           }) ++ add
           history.venues3(out)

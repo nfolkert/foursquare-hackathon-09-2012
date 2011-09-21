@@ -20,7 +20,7 @@ class MapGridTest extends SpecsMatchers {
       DataPoint[VisitData](40.73321007823572, -73.98759841918945, Some(VisitData(1)))
     ))
 
-    val clusters = Cluster.buildClusters(grid.points)
+    val clusters = Cluster.buildClusters2(grid.points.toList)
     val decomposed = grid.decompose
 
     println(clusters)

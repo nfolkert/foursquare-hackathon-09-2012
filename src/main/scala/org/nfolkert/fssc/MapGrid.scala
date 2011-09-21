@@ -18,7 +18,7 @@ case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
 
 }
 
-case class VisitData(visits: Int=0, name: String, lastVisit: DateTime=new DateTime) {}
+case class VisitData(visits: Int=0, name: String="", lastVisit: DateTime=new DateTime) {}
 
 case class RecData(venue: VenueCompact) {}
 
@@ -143,6 +143,17 @@ object Cluster {
     setup.map(p=>{
       new Cluster(p._1, p._2.toSet)
     }).toSet
+  }
+
+  def buildClusters2[T](pts: List[DataPoint[T]], clusterRad: Double = 40000.0): Set[Cluster[T]] = {
+    def recurse(pts: List[DataPoint[T]]): Set[Cluster[T]] = {
+      pts.headOption.map(anchor => {
+        val in = pts.tail.filter(p=>p.distanceTo(anchor) < clusterRad).toSet
+        val out = pts.tail.filterNot(p=>in.contains(p))
+        recurse(out) + Cluster(anchor, in)
+      }).getOrElse(Set[Cluster[T]]())
+    }
+    recurse(pts)
   }
 }
 
