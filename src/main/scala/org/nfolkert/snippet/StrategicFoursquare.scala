@@ -305,7 +305,7 @@ class StrategicFoursquare extends DispatchSnippet {
         }
 
         val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
-        val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+        val breadth = (math.max(boundRect.height, boundRect.length) * grid.metersInDegLat) / 10
 
         val eqScale = math.log(breadth).toInt
         val zoom = math.max(1, 18 - (eqScale-2))
