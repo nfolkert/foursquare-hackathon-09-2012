@@ -6,8 +6,8 @@ import net.liftweb.util.Props
 import org.joda.time.DateTime
 import org.scalafoursquare.auth.OAuthFlow
 import org.scalafoursquare.response.{Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
-import net.liftweb.common.{Loggable, Box}
 import org.nfolkert.lib.{T, Util}
+import net.liftweb.common.{Full, Loggable, Box}
 
 object UserData extends Loggable {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -109,6 +109,8 @@ object UserData extends Loggable {
     if (Util.dateFromSeconds(lastUpdateSeconds).isBefore(new DateTime().minusDays(30)) ||
         Util.dateFromSeconds(lastRefreshSeconds).isBefore(new DateTime().minusDays(180)))
       fetchUserVenueHistory(userid, token)
+    else if (Util.dateFromSeconds(lastUpdateSeconds).isAfter(new DateTime().minusMinutes(1)))
+      Full(history) // We can give a little delay on reloading?
     else {
       val app = getApp(token)
       val recent = app.selfVenueHistory(afterTimestamp = Some(lastUpdateSeconds)).get
