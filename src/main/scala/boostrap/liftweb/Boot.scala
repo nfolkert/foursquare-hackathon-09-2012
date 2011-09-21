@@ -9,6 +9,8 @@ import http._
 import sitemap._
 import Loc._
 import org.nfolkert.fssc.model.MongoSetup
+import org.scalafoursquare.call.App
+import org.scalafoursquare.call.App.CallLogger
 
 /**
  * A class that's instantiated early and run.  It allows the application
@@ -17,6 +19,9 @@ import org.nfolkert.fssc.model.MongoSetup
 class Boot {
   def boot {
     MongoSetup.init
+
+
+    App.logger = APICallLogger
 
     LiftRules.htmlProperties.default.set((r: Req) =>new Html5Properties(r.userAgent))
 
@@ -50,4 +55,14 @@ class Boot {
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))
 
   }
+}
+
+object APICallLogger extends CallLogger with Loggable {
+  def call(msg: => String, timeMillis: Long) {logger.info(msg + " took: " + timeMillis + " ms")}
+  def extract(msg: => String, timeMillis: Long) {logger.info(msg + " took: " + timeMillis + " ms")}
+  def trace(msg: => String) {}
+  def debug(msg: => String) {}
+  def info(msg: => String) {logger.info(msg)}
+  def warn(msg: => String) {logger.warn(msg)}
+  def error(msg: => String) {logger.error(msg)}
 }
