@@ -40,6 +40,7 @@ class StrategicFoursquare extends DispatchSnippet {
 
   def dispatch: DispatchIt = {
     case "renderMap" => renderMap _
+    case "renderTouchMap" => renderTouchMap _
     case "welcome" => welcome _
     case _ => renderMap _
   }
@@ -216,8 +217,8 @@ class StrategicFoursquare extends DispatchSnippet {
              val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
              if (asList.size == 2) {
                currLatLng = Some(asList(0), asList(1))
-             }
-             generateCall(false, false)
+               generateCall(false, false)
+             } else JsCmds.Noop
            }),
            "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full("none"), (newVal) => {
              recType = newVal
@@ -241,5 +242,109 @@ class StrategicFoursquare extends DispatchSnippet {
     }
     else
       xhtml
+  }
+
+  def renderTouchMap(xhtml: NodeSeq): NodeSeq = {
+    val token = (Session.userToken.is.getOrElse(S.redirectTo("/")))
+    val user = (Session.user.is.getOrElse(User.createRecord.id("-1")))
+    val url = S.uri
+
+    var initialLatLng: Option[(Double, Double)] = None
+    var prevLatLng: Option[(Double, Double)] = None
+    var currLatLng: Option[(Double, Double)] = None
+    var cluster: Option[Cluster[VisitData]] = None
+
+    // Set these up in preferences
+    val gridSize = 250
+    val opacity = 1.0
+    val showOverlayBorders = false
+    val recType = "none"
+
+    def initializeMap {
+      currLatLng.map {ll =>
+        initialLatLng = Some(ll)
+        prevLatLng = Some(ll)
+        val allPoints = UserData.getVisitedPoints(token, user)
+        val closePoints = allPoints.filter(_.distanceTo(ll._1, ll._2) < 3000)
+        cluster = closePoints.headOption.map(a => Cluster(a, closePoints))
+      }
+    }
+
+    def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
+
+      (for {
+        ll <- currLatLng
+      } yield {
+        val (pts, bounds) = (for {c <- cluster} yield {
+          (c.pts, c.bounds)
+        }).getOrElse((Set[DataPoint[VisitData]](), (DataPoint[VisitData](ll._1, ll._2), DataPoint[VisitData](ll._1, ll._2))))
+
+        val grid = MapGrid(gridSize, 1.5, pts)
+        val sw = grid.snapPoint(bounds._1)
+        val ne = grid.snapPoint(bounds._2)
+        val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
+
+        val covered = T("Covered Cells") { grid.covered }
+        val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
+
+        val (lat, lng) = ll
+        val recPts = UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+
+        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
+          pt.data.flatMap(d => {
+            val cat = d.venue.categories.find(_.primary.getOrElse(false))
+            val catIcon = cat.map(_.icon)
+            val catName = cat.map(_.name)
+            val name = d.venue.name
+            val address = d.venue.location.address
+            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
+              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              Printer.compact(JsonAST.render(json))
+            }
+          })
+        }
+
+        val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
+        val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+
+        val eqScale = math.log(breadth).toInt
+        val zoom = math.max(1, 18 - (eqScale-2))
+
+        val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+
+        def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+
+        val call = "renderMap(\n" +
+          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
+          "[" + recommendationsJson + "],\n" +
+          "null," +
+          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
+          zoom + ", " +
+          opacity + "," + redrawOverlays + ")"
+
+        JsCmds.Run(call)
+      }).getOrElse(JsCmds.Noop)
+    }
+
+    bind("map", xhtml,
+         "currentlatlng" -%> SHtml.ajaxText("", (newVal)=>{
+           val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+           if (asList.size == 2) {
+             currLatLng = Some(asList(0), asList(1))
+             if (prevLatLng.isEmpty ||
+                 (for {ll1 <- initialLatLng; ll2 <- currLatLng} yield {DataPoint.distanceBetween(ll1._1, ll1._2, ll2._1, ll2._2) > 1000}).getOrElse(true)) {
+               initializeMap
+               generateCall(true, true)
+             }
+             else if ((for {ll1 <- prevLatLng; ll2 <- currLatLng} yield {DataPoint.distanceBetween(ll1._1, ll1._2, ll2._1, ll2._2) > 50}).getOrElse(false)) {
+               generateCall(false, false)
+             } else {
+               JsCmds.Noop
+             }
+           } else
+             JsCmds.Noop
+         })
+    )
   }
 }

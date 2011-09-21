@@ -116,6 +116,11 @@ object UserData extends Loggable {
       val recent = app.selfVenueHistory(afterTimestamp = Some(lastUpdateSeconds)).get
       recent.response.map(r => {
         val newVenues = UserVenueHistory.userHistoryList(r)
+
+        // TODO: if add but no merge: just push add on end of list, update the timestamp
+        // TODO: if merge (with or without add): rebuild the whole list, update the timestamp
+        // TODO: if no merge or add, just update the timestamp
+
         if (!newVenues.isEmpty) {
           val old = history.venues3.value.map(e=>(e.venueId, e)).toMap
           val merge = newVenues.filter(e => old.contains(e.venueId)).map(e=>(e.venueId, e)).toMap

@@ -154,6 +154,7 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
 }
 
 function setupMap() {
+  // TODO: cover initially, center somewhere better in case you can see past cover
   var mapOptions = {
     zoom: 10,
     center: new google.maps.LatLng(40, -74),

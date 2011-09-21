@@ -34,6 +34,8 @@ class Boot {
 
       Menu.i("Map") / "map",
 
+      Menu.i("TouchMap") / "touch" / "map",
+
       // more complex because this menu allows anything in the
       // /static path to be visible
       Menu(Loc("Static", Link(List("static"), true, "/static/index"),

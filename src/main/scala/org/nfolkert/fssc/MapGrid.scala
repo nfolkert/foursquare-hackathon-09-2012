@@ -10,12 +10,17 @@ case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
   }
 
   def distanceTo(l: Double, g: Double): Double = {
-    val theta = lng - g
-    val distance = math.sin(math.toRadians(lat)) * math.sin(math.toRadians(l)) +
-                   math.cos(math.toRadians(lat)) * math.cos(math.toRadians(l)) * math.cos(math.toRadians(theta))
-    return math.floor(6378100 * math.acos(distance))
+    DataPoint.distanceBetween(lat, lng, l, g)
   }
+}
 
+object DataPoint {
+  def distanceBetween(l1: Double, g1: Double, l2: Double, g2: Double): Double = {
+    val theta = g1 - g2
+    val distance = math.sin(math.toRadians(l1)) * math.sin(math.toRadians(l2)) +
+                   math.cos(math.toRadians(l1)) * math.cos(math.toRadians(l2)) * math.cos(math.toRadians(theta))
+    math.floor(6378100 * math.acos(distance))
+  }
 }
 
 case class VisitData(visits: Int=0, name: String="", lastVisit: DateTime=new DateTime) {}
