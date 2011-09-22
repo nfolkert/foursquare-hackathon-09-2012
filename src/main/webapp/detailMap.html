@@ -1,0 +1,58 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:lift="http://liftweb.net"
+      class="lift:StrategicFoursquare.renderMap">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <title>4Sq Conquest</title>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+    <script src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script src="/scripts/strategicFoursquare.js"></script>
+    <script type="text/javascript">
+      $(document).ready(function() {
+        setupMap()
+        document.getElementById('clusterSelect').onchange();
+      })
+    </script>
+  </head>
+  <body style="font-family:Helvetica, Verdana, Arial, sans-serif; text-align:center">
+    <div style="text-decoration:italic; color:#555">
+      <div>
+        Map regions are revealed as you check in to venues in the concealed areas.
+      </div>
+      <div>
+        Drag the placemark to a region you would like to explore, and foursquare will find recommended places in
+        the areas you have yet to explore.
+      </div>
+      <br/>
+    </div>
+    <div>
+      <div id="map_canvas" style="width:860px; height:500px; margin-left:auto; margin-right:auto"></div>
+    </div>
+    <br/>
+    <div style="width:860px; margin-left:auto; margin-right:auto">
+      <div>
+        <table style="text-align:left; float:left; width:300px; background-color:#CCC; font-size:12px">
+          <tr><td>Visited Regions</td><td><span id="visited"></span></td></tr>
+          <tr><td>Score</td><td><span id="totalPoints"></span></td></tr>
+        </table>
+        <table style="text-align:left; float:right; width:300px; background-color:#CCC; font-size:12px">
+          <tr><td colspan="2" style="background-color:#EEE; text-align:center"><h3>Controls</h3></td></tr>
+          <tr><td>Cluster</td><td><map:cluster id="clusterSelect"/></td></tr>
+          <tr><td>Grid Size</td><td><map:gridsize/></td></tr>
+          <tr><td>Opacity</td><td><map:opacity/></td></tr>
+          <tr><td>Overlay Borders</td><td><map:overlayborders/></td></tr>
+          <tr><td>Recommendations</td><td><map:recommendations/></td></tr>
+          <tr><td>Refresh Data</td><td><map:refreshdata/></td></tr>
+          <tr><td>Logout</td><td><map:logout/></td></tr>
+          <tr><td>Delete Data</td><td><map:deletedata/></td></tr>
+        </table>
+        <div style="display:none"><map:searchlatlng id="searchLatLng"/></div>
+      </div>
+    </div>
+    <div id="debug" style="clear:both"></div>
+    <div>
+      <div><a href="/discover">Back to the game map</a></div>
+      <div><a href="/preferences">Preferences</a>
+    </div>
+  </body>
+</html>

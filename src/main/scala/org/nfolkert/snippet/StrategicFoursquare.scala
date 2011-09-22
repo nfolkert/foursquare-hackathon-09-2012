@@ -10,8 +10,8 @@ import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
 import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
 import net.liftweb.util.Props
 import net.liftweb.common.{Loggable, Full}
-import org.nfolkert.lib.T
-import org.nfolkert.fssc.model.{UserVenueHistory, User}
+import org.nfolkert.lib.{SHtmlExt, T}
+import org.nfolkert.fssc.model.{RecommendationType, PlayLevel, ViewType, UserVenueHistory, User}
 
 object Session extends Loggable {
   object userToken extends SessionVar[Option[String]](None)
@@ -40,8 +40,11 @@ class StrategicFoursquare extends DispatchSnippet {
 
   def dispatch: DispatchIt = {
     case "renderMap" => renderMap _
+    case "renderWebMap" => renderWebMap _
     case "renderTouchMap" => renderTouchMap _
     case "welcome" => welcome _
+    case "preferences" => preferences _
+    case "discovery" => discoveryRedirect _
     case _ => renderMap _
   }
 
@@ -53,9 +56,9 @@ class StrategicFoursquare extends DispatchSnippet {
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
-    }).map(t=>{Session.setup(t); S.redirectTo("/touch/map")}).getOrElse({
+    }).map(t=>{Session.setup(t); discoveryRedirect(xhtml)}).getOrElse({
       S.param("test").map(p=>{
-        Session.setup(p); S.redirectTo("/touch/map")
+        Session.setup(p); discoveryRedirect(xhtml)
       }).getOrElse({
         def renderLink(xhtml: NodeSeq): NodeSeq = {
           <a href={oauth.authorizeUrl}>{xhtml}</a>
@@ -65,6 +68,70 @@ class StrategicFoursquare extends DispatchSnippet {
              "link" -%> renderLink _)
       })
     })
+  }
+
+  def discoveryRedirect(xhtml: NodeSeq): NodeSeq = {
+    S.param("display") match {
+      case Full("web") => S.redirectTo("/web_discover")
+      case Full("touch") => S.redirectTo("/touch_discover")
+      case _ => {
+        Session.user.is.map(_.getViewType) match {
+          case Some(ViewType.web) => S.redirectTo("/web_discover")
+          case Some(ViewType.touch) => S.redirectTo("/touch_discover")
+          case _ => {
+            S.request.flatMap(_.userAgent) match {
+              case Full(v) if v.indexOf("iPhone") >= 0 => S.redirectTo("/touch_discover")
+              case Full(v) if v.indexOf("Android") >= 0 => S.redirectTo("/touch_discover")
+              case _ => S.redirectTo("/web_discover")
+            }
+          }
+        }
+      }
+    }
+    NodeSeq.Empty
+  }
+
+  def preferences(xhtml: NodeSeq): NodeSeq = {
+    (for {user <- Session.user.is; token <- Session.userToken.is} yield {
+      val viewType = user.getViewType
+      val level = user.getPlayLevel
+      val recs = user.getRecommendations
+      val mapDetail = user.opacity.value
+
+      val levelOpts = PlayLevel.values.map(v=>(v.name, v.desc))
+      val viewOpts = ViewType.values.map(v=>(v.name, v.desc))
+      val recommendationOpts = RecommendationType.values.map(v=>(v.name, v.desc))
+
+      bind("prefs", xhtml,
+           "level" -%> SHtml.ajaxSelect(levelOpts, Full(level.name), (newLevel) => {
+             PlayLevel.values.find(_.name == newLevel).map(nl=>user.setPlayLevel(nl).save); JsCmds.Noop
+           }),
+           "viewtypes" -%> SHtml.ajaxSelect(viewOpts, Full(viewType.name), (newType) => {
+             ViewType.values.find(_.name == newType).map(nt=>user.setViewType(nt).save); JsCmds.Noop
+           }),
+           "opacity" -%> SHtmlExt.ajaxRange(0.333, 1.0, 0.05, mapDetail, (newVal) => {
+             user.opacity(newVal).save; JsCmds.Noop
+           }),
+           "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full(recs.name), (newVal) => {
+             RecommendationType.values.find(_.name == newVal).map(rc=>user.setRecommendations(rc).save); JsCmds.Noop
+           }),
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
+           "refreshdata" -%> SHtml.ajaxButton("Refresh", () => {
+             Session.user.is.map(user=>{
+               Session.setup(token)
+               UserData.fetchUserVenueHistory(user.id.value, token)
+               JsCmds.Alert("Data refreshed")
+             }).getOrElse(JsCmds.Noop)
+           }),
+           "deletedata" -%> SHtml.ajaxButton("Clear", () => {
+             Session.user.is.map(user=>{
+               UserVenueHistory.find(user.id.value).map(_.delete_!)
+               Session.clear;
+               JsCmds.RedirectTo("/")
+             }).getOrElse(JsCmds.Noop)
+           })
+      )
+    }).getOrElse({S.redirectTo("/"); NodeSeq.Empty})
   }
 
   def renderMap(xhtml: NodeSeq): NodeSeq = T("Render Map") {
@@ -190,12 +257,6 @@ class StrategicFoursquare extends DispatchSnippet {
       }
 
       bind("map", xhtml,
-           "setup" -> {
-             val call = SHtml.ajaxCall(JE.JsRaw(""), (ignored) => {
-               generateCall(true, true)
-             })._2.toJsCmd
-             <script type="text/javascript">{call}</script>
-           },
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
              clusterIdx = tryo(newCluster.toInt).openOr(0)
              generateCall(true, true)
@@ -245,6 +306,147 @@ class StrategicFoursquare extends DispatchSnippet {
       xhtml
   }
 
+  def renderWebMap(xhtml: NodeSeq): NodeSeq = {
+    val token = (Session.userToken.is.getOrElse(S.redirectTo("/")))
+    val user = (Session.user.is.getOrElse(User.createRecord.id("-1")))
+
+    val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+    val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
+
+    def clusterName(cluster: Cluster[VisitData]): String = {
+      val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
+      grouped.map(_._1).headOption.getOrElse(cluster.anchor.lat + ", " + cluster.anchor.lng)
+    }
+
+    if (!clusters.isEmpty) {
+      var clusterIdx = 0
+      val gridSize = user.getPlayLevel.gridSize
+      val opacity = user.opacity.value
+      var searchLatLng: Option[(Double, Double)] = None
+      val showOverlayBorders = false
+      val recType = user.getRecommendations.name
+
+      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
+        val cluster = if (clusterIdx < 0) {
+          Cluster(visitPoints(0), visitPoints.toSet)
+        } else
+          clusters(clusterIdx)
+        val pts = cluster.pts
+        val bounds = cluster.bounds
+        if (searchLatLng.isEmpty || resetZoom) {
+          searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+        }
+
+        val grid = MapGrid(gridSize, 1.5, pts)
+        val sw = grid.snapPoint(bounds._1)
+        val ne = grid.snapPoint(bounds._2)
+        val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
+
+        val covered = T("Covered Cells") { grid.covered }
+        val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
+        val recPts = searchLatLng.map(p => {
+          val (lat, lng) = p
+          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+        }).getOrElse(Nil)
+
+        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
+          pt.data.flatMap(d => {
+            val cat = d.venue.categories.find(_.primary.getOrElse(false))
+            val catIcon = cat.map(_.icon)
+            val catName = cat.map(_.name)
+            val name = d.venue.name
+            val address = d.venue.location.address
+            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
+              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              Printer.compact(JsonAST.render(json))
+            }
+          })
+        }
+
+        val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
+        val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+
+        val eqScale = math.log(breadth).toInt
+        val zoom = math.max(1, 18 - (eqScale-2))
+
+        val debug = <div>
+          <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
+          <div>Total Point Count: {visitPoints.size}</div>
+          <div>Cluster Point Count: {pts.size}</div>
+          <div>Overlay Count: {rects.size}</div>
+        </div>
+        /*
+          <div>Points: {visitPoints.toString}</div>
+          <div>Cluster: {cluster.toString}</div>
+          <div>Overlays: {rects.toString}</div>
+        </div>
+        */
+
+        val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+
+        def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+
+        val call = "renderMap(\n" +
+          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
+          "[" + recommendationsJson + "],\n" +
+          searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
+          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
+          zoom + ", " +
+          opacity + "," + redrawOverlays + ")"
+
+        val showScore = "renderScore(" + score.visited + "," + score.total + ")"
+        JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
+        JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
+        JsCmds.SetHtml("debug", debug) &
+        JsCmds.Run(call)
+      }
+
+      val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
+
+      val recommendationOpts = List(
+        ("none", "No Recommendations"),
+        ("food", "Food"), ("drinks", "Drinks"), ("coffee", "Coffee"), ("shops", "Shopping"), ("arts", "Arts and Entertainment"), ("outdoors", "Outdoors"),
+        ("all", "All Categories")
+      )
+
+      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+
+      def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
+        // There is no lift ajax range slider; only a regular range slider.  Wah.
+        import net.liftweb.util.Helpers._
+        import net.liftweb.http.js.JE.JsRaw
+
+        val fHolder = S.LFuncHolder(in => in.headOption.flatMap(asDouble(_)).map(fn(_)).getOrElse(JsCmds.Noop))
+
+        val raw = (funcName: String, value: String) => JsRaw("'" + funcName + "=' + encodeURIComponent(" + value + ".value)")
+        val key = S.formFuncName
+
+        S.fmapFunc(S.contextFuncBuilder(fHolder)) {
+          funcName =>
+            <input type="range" min={min.toString} max={max.toString} step={step.toString} value={value.toString} onchange={SHtml.makeAjaxCall(raw(funcName, "this")).toJsCmd}/>
+        }
+      }
+
+      bind("map", xhtml,
+           "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
+             clusterIdx = tryo(newCluster.toInt).openOr(0)
+             generateCall(true, true)
+           }),
+           "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
+             val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+             if (asList.size == 2) {
+               searchLatLng = Some(asList(0), asList(1))
+               generateCall(false, false)
+             } else JsCmds.Noop
+
+           })
+      )
+    }
+    else
+      xhtml
+  }
+
   def renderTouchMap(xhtml: NodeSeq): NodeSeq = {
     val token = (Session.userToken.is.getOrElse(S.redirectTo("/")))
     val user = (Session.user.is.getOrElse(User.createRecord.id("-1")))
@@ -257,10 +459,10 @@ class StrategicFoursquare extends DispatchSnippet {
     var cluster: Option[Cluster[VisitData]] = None
 
     // Set these up in preferences
-    val gridSize = 250
-    val opacity = 1.0
+    val gridSize = user.getPlayLevel.gridSize
+    val opacity = user.opacity.value
     val showOverlayBorders = false
-    val recType = "all"
+    val recType = user.getRecommendations.name
 
     def initializeMap {
       currLatLng.map {ll =>

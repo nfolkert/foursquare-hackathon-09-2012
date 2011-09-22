@@ -22,6 +22,7 @@ object Util extends Loggable {
     logger.info(name + " took " + time + " ms")
     ret
   }
+
 }
 
 object T{def apply[T](name: String)(f: => T): T = Util.logTime(name)(f)}

@@ -31,9 +31,11 @@ class Boot {
     // Build SiteMap
     val entries = List(
       Menu.i("Home") / "index", // the simple way to declare a menu
-      Menu.i("Map") / "map",
       Menu.i("Preferences") / "preferences",
-      Menu.i("TouchMap") / "touch" / "map",
+      Menu.i("Discover") / "discover",
+      Menu.i("DiscoverWeb") / "web_discover",
+      Menu.i("DiscoverTouch") / "touch_discover",
+      Menu.i("MapDetail") / "detailMap",
 
       // more complex because this menu allows anything in the
       // /static path to be visible

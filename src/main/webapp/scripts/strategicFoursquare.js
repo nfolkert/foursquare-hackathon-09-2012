@@ -64,7 +64,7 @@ function updateRects() {
 }
 
 function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
-
+  stickyDefaults.fillOpacity = opacity
   if (redrawOverlays) {
   // Clear existing overlays
     for (var i = 0; i < overlays.length; i++)
