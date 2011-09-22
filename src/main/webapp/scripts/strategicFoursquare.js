@@ -3,13 +3,12 @@ var recs = []
 var currPos;
 var searchPos;
 var map;
+var isTouch = false
 
 var infowindow = new google.maps.InfoWindow({disableAutoPan: false})
-/*
-google.maps.event.addListener(marker, 'click', function() {
-  infowindow.open(map, marker);
-});
-*/
+var windowopen = false
+function closeInfoWindow() {infowindow.close(); windowopen=false}
+function openInfoWindow(map, marker) {infowindow.open(map, marker); windowopen=true}
 
 
 // Sticky Options
@@ -79,8 +78,14 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
       var opts = defaultOptions(map, rectBounds)
 
       rect.setOptions(opts)
-      google.maps.event.addListener(rect, 'click', function() {
-        infowindow.close()
+      google.maps.event.addListener(rect, 'click', function(event) {
+        if (isTouch && !windowopen) {
+          var lat = event.latLng.lat()
+          var lng = event.latLng.lng()
+          updateSearchPosition(lat, lng, true)
+          $('#searchLatLng').val(lat + ',' + lng).blur()
+        }
+        closeInfoWindow()
       });
 
       overlays.push(rect)
@@ -113,7 +118,7 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
         addLine("Type", r.catName, content)
         addLine("Address", r.address, content)
         infowindow.setContent(content)
-        infowindow.open(map, marker);
+        openInfoWindow(map, marker)
       }
       google.maps.event.addListener(marker, 'click', eventFn);
       recs.push(marker)
@@ -137,10 +142,10 @@ function setupMap() {
   };
   map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
   google.maps.event.addListener(map, 'click', function() {
-    infowindow.close()
+    closeInfoWindow()
   });
   google.maps.event.addListener(map, 'dragstart', function() {
-    infowindow.close()
+    closeInfoWindow()
   });
 }
 
@@ -154,10 +159,10 @@ function updateSearchPosition(lat, lng, forTouch) {
     })
     if (!forTouch) {
       google.maps.event.addListener(searchPos, 'dragstart', function() {
-        infowindow.close()
+        closeInfoWindow()
       });
       google.maps.event.addListener(searchPos, 'click', function() {
-        infowindow.close()
+        closeInfoWindow()
       });
       google.maps.event.addListener(searchPos, 'dragend', function() {
         var p = searchPos.getPosition()
@@ -194,9 +199,12 @@ function setupTouchMap() {
   map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
 
   google.maps.event.addListener(map, 'click', function(event) {
-    var lat = event.latLng.lat()
-    var lng = event.latLng.lng()
-    updateSearchPosition(lat, lng, true)
-    $('#searchLatLng').val(lat + ',' + lng).blur()
+    if (!windowopen) {
+      var lat = event.latLng.lat()
+      var lng = event.latLng.lng()
+      updateSearchPosition(lat, lng, true)
+      $('#searchLatLng').val(lat + ',' + lng).blur()
+    }
+    closeInfoWindow()
   });
 }

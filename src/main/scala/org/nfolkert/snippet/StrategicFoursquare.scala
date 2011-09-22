@@ -51,7 +51,7 @@ class StrategicFoursquare extends DispatchSnippet {
   def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
     val url = S.uri
 
-    if (Session.userToken.is.isDefined) S.redirectTo("/touch/map")
+    if (Session.userToken.is.isDefined) S.redirectTo("/discover")
 
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
