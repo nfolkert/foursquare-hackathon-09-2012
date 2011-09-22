@@ -10,14 +10,6 @@
     <script type="text/javascript">
       $(document).ready(function() {
         setupMap()
-        /* // Use this approach for mobile; not as useful on web
-        if (navigator.geolocation)
-          navigator.geolocation.getCurrentPosition(function(position) {
-            var lat = position.coords.latitude
-            var lng = position.coords.longitude
-            $('#currentLatLng').val(lat + ',' + lng).blur()
-        })
-        */
         document.getElementById('clusterSelect').onchange();
       })
     </script>
@@ -55,6 +47,7 @@
           <tr><td>Delete Data</td><td><map:deletedata/></td></tr>
         </table>
         <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
+        <div style="display:none"><map:searchlatlng id="searchLatLng"/></div>
       </div>
     </div>
     <div id="debug"></div>

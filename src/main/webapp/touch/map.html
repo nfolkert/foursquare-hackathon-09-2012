@@ -4,7 +4,7 @@
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=320; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;" />
+    <meta name="viewport" content="initial-scale=1.0; user-scalable=0;" />
     <title>4Sq Conquest</title>
 
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
@@ -14,25 +14,41 @@
       $(document).ready(function() {
         if (!navigator.geolocation)
           alert("This application requires geolocation support!")
-        else
+        else {
+          setupTouchMap()
+          var originalLat
+          var originalLng
           navigator.geolocation.getCurrentPosition(function(position) {
-            setupMap()
-            var lat = position.coords.latitude
-            var lng = position.coords.longitude
-            $('#currentLatLng').val(lat + ',' + lng).blur()
-            setInterval(function() {
+            originalLat = position.coords.latitude
+            originalLng = position.coords.longitude
+            updateCurrentPosition(originalLat, originalLng)
+            $('#currentLatLng').val(originalLat + ',' + originalLng).blur()
+          })
+          setInterval(function() {
+            navigator.geolocation.getCurrentPosition(function(position) {
               var lat = position.coords.latitude
               var lng = position.coords.longitude
+              updateCurrentPosition(lat, lng)
               $('#currentLatLng').val(lat + ',' + lng).blur()
-            }, 10000)
-          })
+            })
+          }, 10000)
+        }
       })
     </script>
   </head>
-  <body style="font-family:Helvetica, Verdana, Arial, sans-serif; text-align:center">
-    <div>
-      <div id="map_canvas" style="width:320px; height:480px"></div>
+  <body style="font-family:Helvetica, Verdana, Arial, sans-serif; text-align:center; margin: 0">
+    <div id="mapPanel" style="width:100%; min-height:412px">
+      <div id="map_canvas" style="width:100%; min-height:412px"></div>
+      <div id="options" style="background-color:#888; padding:10px; position:absolute; right:6px; top:6px">
+        <a href="#" onclick="$('#optionPanel').show(); $('#mapPanel').hide(); return false;">Options</a>
+      </div>
+    </div>
+    <div id="optionPanel" style="width:100%; min-height:412px; display:none">
+      <div><a href="/map">Go to detail map</a></div>
+      <div><a href="/preferences">Preferences</a>
+      <div><a href="#" onclick="$('#mapPanel').show(); $('#optionPanel').hide(); return false;">Return to map</a></div>
     </div>
     <div style="display:none"><map:currentlatlng id="currentLatLng"/></div>
+    <div style="display:none"><map:searchlatlng id="searchLatLng"/></div>
   </body>
 </html>

@@ -48,14 +48,14 @@ class StrategicFoursquare extends DispatchSnippet {
   def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
     val url = S.uri
 
-    if (Session.userToken.is.isDefined) S.redirectTo("/map")
+    if (Session.userToken.is.isDefined) S.redirectTo("/touch/map")
 
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
-    }).map(t=>{Session.setup(t); S.redirectTo("/map")}).getOrElse({
+    }).map(t=>{Session.setup(t); S.redirectTo("/touch/map")}).getOrElse({
       S.param("test").map(p=>{
-        Session.setup(p); S.redirectTo("/map")
+        Session.setup(p); S.redirectTo("/touch/map")
       }).getOrElse({
         def renderLink(xhtml: NodeSeq): NodeSeq = {
           <a href={oauth.authorizeUrl}>{xhtml}</a>
@@ -83,7 +83,7 @@ class StrategicFoursquare extends DispatchSnippet {
       var clusterIdx = 0//clusters.length-1
       var gridSize = 250
       var opacity = 1.0
-      var currLatLng: Option[(Double, Double)] = None
+      var searchLatLng: Option[(Double, Double)] = None
       var showOverlayBorders = false
       var recType = "none"
 
@@ -94,8 +94,8 @@ class StrategicFoursquare extends DispatchSnippet {
           clusters(clusterIdx)
         val pts = cluster.pts
         val bounds = cluster.bounds
-        if (currLatLng.isEmpty || resetZoom) {
-          currLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+        if (searchLatLng.isEmpty || resetZoom) {
+          searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
         }
 
         val grid = MapGrid(gridSize, 1.5, pts)
@@ -105,7 +105,7 @@ class StrategicFoursquare extends DispatchSnippet {
 
         val covered = T("Covered Cells") { grid.covered }
         val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
-        val recPts = currLatLng.map(p => {
+        val recPts = searchLatLng.map(p => {
           val (lat, lng) = p
           UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
         }).getOrElse(Nil)
@@ -131,7 +131,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val zoom = math.max(1, 18 - (eqScale-2))
 
         val debug = <div>
-          <div>Current Position: {currLatLng.map(_.toString).getOrElse("Unknown")}</div>
+          <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
           <div>Total Point Count: {visitPoints.size}</div>
           <div>Cluster Point Count: {pts.size}</div>
           <div>Overlay Count: {rects.size}</div>
@@ -151,7 +151,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val call = "renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
           "[" + recommendationsJson + "],\n" +
-          currLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
+          searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
           (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
           zoom + ", " +
           opacity + "," + redrawOverlays + ")"
@@ -213,12 +213,13 @@ class StrategicFoursquare extends DispatchSnippet {
              JsCmds.Run("showBorders(" + showOverlayBorders + ")")
            }),
            "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
-           "currentlatlng" -%> SHtml.ajaxText("", (newVal)=>{
+           "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
              val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
              if (asList.size == 2) {
-               currLatLng = Some(asList(0), asList(1))
+               searchLatLng = Some(asList(0), asList(1))
                generateCall(false, false)
              } else JsCmds.Noop
+
            }),
            "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full("none"), (newVal) => {
              recType = newVal
@@ -252,13 +253,14 @@ class StrategicFoursquare extends DispatchSnippet {
     var initialLatLng: Option[(Double, Double)] = None
     var prevLatLng: Option[(Double, Double)] = None
     var currLatLng: Option[(Double, Double)] = None
+    var searchLatLng: Option[(Double, Double)] = None
     var cluster: Option[Cluster[VisitData]] = None
 
     // Set these up in preferences
     val gridSize = 250
     val opacity = 1.0
     val showOverlayBorders = false
-    val recType = "none"
+    val recType = "all"
 
     def initializeMap {
       currLatLng.map {ll =>
@@ -271,7 +273,6 @@ class StrategicFoursquare extends DispatchSnippet {
     }
 
     def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
-
       (for {
         ll <- currLatLng
       } yield {
@@ -287,8 +288,11 @@ class StrategicFoursquare extends DispatchSnippet {
         val covered = T("Covered Cells") { grid.covered }
         val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
 
-        val (lat, lng) = ll
-        val recPts = UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+
+        val recPts = searchLatLng.map(ll => {
+          val (lat, lng) = ll
+          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+        }).getOrElse(Nil)
 
         def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
           pt.data.flatMap(d => {
@@ -333,17 +337,21 @@ class StrategicFoursquare extends DispatchSnippet {
            if (asList.size == 2) {
              currLatLng = Some(asList(0), asList(1))
              if (prevLatLng.isEmpty ||
-                 (for {ll1 <- initialLatLng; ll2 <- currLatLng} yield {DataPoint.distanceBetween(ll1._1, ll1._2, ll2._1, ll2._2) > 1000}).getOrElse(true)) {
+                 (for {ll1 <- initialLatLng; ll2 <- currLatLng} yield {DataPoint.distanceBetween(ll1._1, ll1._2, ll2._1, ll2._2) > 500}).getOrElse(true)) {
                initializeMap
                generateCall(true, true)
-             }
-             else if ((for {ll1 <- prevLatLng; ll2 <- currLatLng} yield {DataPoint.distanceBetween(ll1._1, ll1._2, ll2._1, ll2._2) > 50}).getOrElse(false)) {
-               generateCall(false, false)
              } else {
                JsCmds.Noop
              }
            } else
              JsCmds.Noop
+         }),
+         "searchlatlng" -%> SHtml.ajaxText("", (newVal)=>{
+           val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+           if (asList.size == 2) {
+             searchLatLng = Some(asList(0), asList(1))
+             generateCall(false, false)
+           } else JsCmds.Noop
          })
     )
   }

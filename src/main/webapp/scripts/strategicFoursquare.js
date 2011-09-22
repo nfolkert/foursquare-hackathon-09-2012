@@ -1,6 +1,7 @@
 var overlays = []
 var recs = []
 var currPos;
+var searchPos;
 var map;
 
 var infowindow = new google.maps.InfoWindow({disableAutoPan: false})
@@ -62,11 +63,6 @@ function updateRects() {
   }
 }
 
-function updateLocation(lat, lng) {
-  if (!currPos) {
-  }
-}
-
 function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
 
   if (redrawOverlays) {
@@ -125,27 +121,7 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
     generateMarker(inRecs[i])
   }
 
-  if (pos) {
-    if (!currPos) {
-      currPos = new google.maps.Marker({
-        position: new google.maps.LatLng(pos[0], pos[1]),
-        map: map,
-        clickable: true,
-        draggable: true
-      })
-      google.maps.event.addListener(currPos, 'dragstart', function() {
-        infowindow.close()
-      });
-      google.maps.event.addListener(currPos, 'click', function() {
-        infowindow.close()
-      });
-      google.maps.event.addListener(currPos, 'dragend', function() {
-        var p = currPos.getPosition()
-        $('#currentLatLng').val(p.lat() + ',' + p.lng()).blur()
-      });
-    }
-    else currPos.setPosition(new google.maps.LatLng(pos[0], pos[1]))
-  }
+  if (pos) updateSearchPosition(pos[0], pos[1], false)
 
   if (center) {
     map.setZoom(zoom)
@@ -154,7 +130,6 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
 }
 
 function setupMap() {
-  // TODO: cover initially, center somewhere better in case you can see past cover
   var mapOptions = {
     zoom: 10,
     center: new google.maps.LatLng(40, -74),
@@ -167,5 +142,61 @@ function setupMap() {
   google.maps.event.addListener(map, 'dragstart', function() {
     infowindow.close()
   });
+}
 
+function updateSearchPosition(lat, lng, forTouch) {
+  if (!searchPos) {
+    searchPos = new google.maps.Marker({
+      position: new google.maps.LatLng(lat, lng),
+      map: map,
+      clickable: !forTouch,
+      draggable: !forTouch
+    })
+    if (!forTouch) {
+      google.maps.event.addListener(searchPos, 'dragstart', function() {
+        infowindow.close()
+      });
+      google.maps.event.addListener(searchPos, 'click', function() {
+        infowindow.close()
+      });
+      google.maps.event.addListener(searchPos, 'dragend', function() {
+        var p = searchPos.getPosition()
+        $('#searchLatLng').val(p.lat() + ',' + p.lng()).blur()
+      });
+    }
+  }
+  else searchPos.setPosition(new google.maps.LatLng(lat, lng))
+}
+
+function updateCurrentPosition(lat, lng) {
+  if (!currPos) {
+    currPos = new google.maps.Marker({
+      position: new google.maps.LatLng(lat, lng),
+      icon: "/images/currentPosition.gif",
+      map: map,
+      clickable: false,
+      draggable: false
+    })
+  }
+  else currPos.setPosition(new google.maps.LatLng(lat, lng))
+}
+
+function setupTouchMap() {
+  var mapOptions = {
+    zoom: 10,
+    center: new google.maps.LatLng(40, -74),
+    mapTypeId: google.maps.MapTypeId.ROADMAP,
+    zoomControl: false, panControl: false, rotateControl: false,
+    streetViewControl: false, scaleControl: false,
+    scrollwheel: false, overviewMapControl: false,
+    mapTypeControl: false
+  };
+  map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+
+  google.maps.event.addListener(map, 'click', function(event) {
+    var lat = event.latLng.lat()
+    var lng = event.latLng.lng()
+    updateSearchPosition(lat, lng, true)
+    $('#searchLatLng').val(lat + ',' + lng).blur()
+  });
 }
