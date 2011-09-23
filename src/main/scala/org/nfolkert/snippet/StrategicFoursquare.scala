@@ -181,7 +181,7 @@ class StrategicFoursquare extends DispatchSnippet {
           val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
           val recPts = searchLatLng.map(p => {
             val (lat, lng) = p
-            UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+            UserData.getRecommendedPoints(lat, lng, grid, rects.toSet, recType, true, token).toList
           }).getOrElse(Nil)
 
           val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
@@ -287,22 +287,17 @@ class StrategicFoursquare extends DispatchSnippet {
         }
 
         val grid = MapGrid(gridSize, 1.5, pts)
-        val sw = grid.snapPoint(bounds._1)
-        val ne = grid.snapPoint(bounds._2)
-        val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
         val covered = T("Covered Cells") { grid.covered }
         val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
         val recPts = searchLatLng.map(p => {
           val (lat, lng) = p
-          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+          UserData.getRecommendedPoints(lat, lng, grid, rects.toSet, recType, true, token).toList
         }).getOrElse(Nil)
 
-        val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
-        val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+        val center = searchLatLng.getOrElse((cluster.anchor.lat, cluster.anchor.lng))
 
-        val eqScale = math.log(breadth).toInt
-        val zoom = math.max(1, 18 - (eqScale-2))
+        val zoom = user.getPlayLevel.initialZoom-1
 
         val debug = <div>
           <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
@@ -380,24 +375,20 @@ class StrategicFoursquare extends DispatchSnippet {
         }).getOrElse((Set[DataPoint[VisitData]](), (DataPoint[VisitData](ll._1, ll._2), DataPoint[VisitData](ll._1, ll._2))))
 
         val grid = MapGrid(gridSize, 1.5, pts)
-        val sw = grid.snapPoint(bounds._1)
-        val ne = grid.snapPoint(bounds._2)
-        val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
         val covered = T("Covered Cells") { grid.covered }
         val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
 
+        if (searchLatLng.isEmpty) {
+          searchLatLng = Some(ll._1, ll._2)
+        }
 
         val recPts = searchLatLng.map(ll => {
           val (lat, lng) = ll
-          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+          UserData.getRecommendedPoints(lat, lng, grid, rects.toSet, recType, false, token).toList
         }).getOrElse(Nil)
 
-        val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
-        val breadth = (math.max(boundRect.height, boundRect.length) * grid.metersInDegLat) / 10
-
-        val eqScale = math.log(breadth).toInt
-        val zoom = math.max(1, 18 - (eqScale-2))
+        val zoom = user.getPlayLevel.initialZoom
 
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
@@ -407,7 +398,7 @@ class StrategicFoursquare extends DispatchSnippet {
         JsCmds.Run(setOpacityCall(opacity)) &
         (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
         JsCmds.Run(renderRecsCall(recommendationsJson)) &
-        (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop)
+        (if (resetZoom) JsCmds.Run(resetViewCall(ll._1, ll._2, zoom)) else JsCmds.Noop)
       }).getOrElse(JsCmds.Noop)
     }
 

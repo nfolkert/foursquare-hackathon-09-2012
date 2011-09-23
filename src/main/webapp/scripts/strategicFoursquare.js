@@ -160,6 +160,7 @@ var g4c = function() {
       searchPos = new google.maps.Marker({
         position: new google.maps.LatLng(lat, lng),
         map: map,
+        icon:"/images/target.gif",
         clickable: !isTouch,
         draggable: !isTouch
       })

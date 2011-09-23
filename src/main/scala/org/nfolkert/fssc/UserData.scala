@@ -1,6 +1,6 @@
 package org.nfolkert.fssc
 
-import model.{UserVenueHistoryEntry, UserVenueHistoryEntry2, UserVenueHistory, User}
+import model.{UserVenueHistoryEntry, UserVenueHistory, User}
 import org.scalafoursquare.call.{HttpCaller, AuthApp}
 import net.liftweb.util.Props
 import org.joda.time.DateTime
@@ -39,8 +39,10 @@ object UserData extends Loggable {
 
   def getRecommendedPoints(lat: Double,
                            lng: Double,
+                           grid: MapGrid,
                            filters: Set[Rectangle],
                            recType: String,
+                           wide: Boolean,
                            token: String): Set[DataPoint[RecData]] = T("Get Recommendations") {
     if (recType == "none")
       Set[DataPoint[RecData]]()
@@ -50,34 +52,30 @@ object UserData extends Loggable {
         case "all" => None;
         case t => Some(t)
       }
+      val gridSize = grid.latGridSizeInMeters
 
-      val raw = app.multi(
-        app.exploreVenues(lat, lng, radius=Some(200), novelty=Some("new"), section=section),
-        //app.exploreVenues(lat, lng, radius=Some(400), novelty=Some("new")),
-        app.exploreVenues(lat, lng, radius=Some(750), novelty=Some("new"), section=section),
-        //app.exploreVenues(lat, lng, radius=Some(1000), novelty=Some("new")),
-        app.exploreVenues(lat, lng, radius=Some(5000), novelty=Some("new"), section=section)
-      ).get
+      val reqs = List(
+          app.exploreVenues(lat, lng, radius=Some(gridSize), novelty=Some("new"), section=section),
+          app.exploreVenues(lat, lng, radius=Some(gridSize*3), novelty=Some("new"), section=section)
+        ) ++ (if (wide) List(app.exploreVenues(lat, lng, radius=Some(gridSize*10), novelty=Some("new"), section=section)) else Nil)
 
-      def filterRecommendations(response: Option[Response[VenueExploreResponse]]) = {
-        response.flatMap(_.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
+      // TODO: consider parallelizing locally; multi endpoint does not parallelize
+      val raw = app.multi(reqs).get
+
+      def filterRecommendations(response: Response[VenueExploreResponse]) = {
+        response.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
           val venues: List[VenueCompact] = veg.items.map(_.venue)
           val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
           points.filter(pt=>filters.find(_.contains(pt)).isDefined)
-            .map(p=>(p.distanceTo(lat, lng), p))
-        })).getOrElse(Nil)
+        }).getOrElse(Nil)
       }
-      val close = filterRecommendations(raw.responses._1).sortBy(_._1).map(_._2)
-      val mediumclose = Nil// filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
-      val medium = filterRecommendations(raw.responses._2).sortBy(_._1).map(_._2)
-      val mediumfar = Nil// filterRecommendations(raw.responses._4).sortBy(_._1).map(_._2)
-      val far = filterRecommendations(raw.responses._3).sortBy(_._1).map(_._2)
 
-      (close.take(5) ++
-       mediumclose.take(5) ++
-       medium.take(5) ++
-       mediumfar.take(5) ++
-       far.take(5)).toSet
+      val filtered = raw.responses.toList.flatMap(identity).flatMap(r=>filterRecommendations(r)).toList
+      val maxPerCell = 2
+      grid.mapToGrid(filtered).toList.flatMap(p=>{
+        val inGrid = p._2
+        inGrid.take(maxPerCell) // Take the top recommedations for each grid cell
+      }).toSet
     }
   }
 
@@ -122,7 +120,7 @@ object UserData extends Loggable {
         // TODO: if no merge or add, just update the timestamp
 
         if (!newVenues.isEmpty) {
-          val old = history.venues3.value.map(e=>(e.venueId, e)).toMap
+          val old = history.venues.value.map(e=>(e.venueId, e)).toMap
           val merge = newVenues.filter(e => old.contains(e.venueId)).map(e=>(e.venueId, e)).toMap
           val add = newVenues.filterNot(e => old.contains(e.venueId))
 
@@ -134,7 +132,7 @@ object UserData extends Loggable {
                 orig.beenHere + m.beenHere, m.address, m.city, m.state, m.country, m.catId)
             }).getOrElse(orig)
           }) ++ add
-          history.venues3(out)
+          history.venues(out)
         }
         history.setLastUpdate(new DateTime()).save
 
@@ -164,16 +162,7 @@ object UserData extends Loggable {
 
     T("Build Data Points") {
       history.map(r=>{
-        /*
-        r.venues2.value.map(i => {
-          val v: UserVenueHistoryEntry2 = i
-          val name = v.city.valueBox.or(v.state.valueBox.or(v.country.valueBox)).openOr(i.lat + ", " + i.lng)
-          val data = VisitData(v.beenHere.value, name)
-          DataPoint(v.lat.value, v.lng.value, Some(data))
-        }).toSet
-         */
-
-        r.venues3.value.map(i => {
+        r.venues.value.map(i => {
           val v: UserVenueHistoryEntry = i
           val name = v.city.orElse(v.state.orElse(v.country)).getOrElse(v.lat + ", " + v.lng)
           val data = VisitData(v.beenHere, name)

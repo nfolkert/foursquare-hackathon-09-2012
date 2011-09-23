@@ -219,7 +219,7 @@ case class MapGrid(latGridSizeInMeters: Int,
     pts.map(pt=>snapPoint(pt))
   }
 
-  def mapToGrid[T](pts: Set[DataPoint[T]]): Map[(Double, Double), Set[DataPoint[T]]] = {
+  def mapToGrid[T](pts: List[DataPoint[T]]): Map[(Double, Double), List[DataPoint[T]]] = {
     pts.map(pt=>{
       val snapped = snapPoint(pt)
       val key = (snapped.lat, snapped.lng)
@@ -244,7 +244,6 @@ case class MapGrid(latGridSizeInMeters: Int,
     val global = Rectangle(-180, -90, 180, 90)
     val decomp = Rectangle.decompose(List(global), rects, false)
     Rectangle.merge(decomp).toSet
-    // decomp.toSet
   }
 
   lazy val covered: List[Rectangle] = {

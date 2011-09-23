@@ -46,22 +46,6 @@ case class UserVenueHistoryEntry(venueId: String, name: String, lat: Double, lng
   }
 }
 
-class UserVenueHistoryEntry2 extends BsonRecord[UserVenueHistoryEntry2] {
-  def meta = UserVenueHistoryEntry2
-
-  object venueId extends StringField(this, 100) {override def name = "i"}
-  object name extends StringField(this, 100) {override def name = "n"}
-  object lat extends DoubleField(this) {override def name = "l"}
-  object lng extends DoubleField(this) {override def name = "g"}
-  object beenHere extends IntField(this) {override def name = "b"}
-  object address extends StringField(this, 100) {override def name = "a"; override def optional_? = true}
-  object city extends StringField(this, 100) {override def name = "c"; override def optional_? = true}
-  object state extends StringField(this, 100) {override def name = "s"; override def optional_? = true}
-  object country extends StringField(this, 100) {override def name = "k"; override def optional_? = true}
-}
-
-object UserVenueHistoryEntry2 extends UserVenueHistoryEntry2 with BsonMetaRecord[UserVenueHistoryEntry2]
-
 class UserVenueHistory extends MongoRecord[UserVenueHistory] {
   def meta = UserVenueHistory
 
@@ -81,17 +65,7 @@ class UserVenueHistory extends MongoRecord[UserVenueHistory] {
   def getLastUpdate = Util.dateFromSeconds(lastUpdate.value)
   def setLastUpdate(date: DateTime) = lastUpdate(Util.secondsFromDate(date))
 
-/*  object venues extends MongoCaseClassListField[UserVenueHistory, UserVenueHistoryEntry](this) {
-    override def name = "vs"
-  }*/
-
-  /*
-  object venues2 extends BsonRecordListField(this, UserVenueHistoryEntry2) {
-    override def name = "vs"
-  }
-  */
-
-  object venues3 extends MongoListField[UserVenueHistory, UserVenueHistoryEntry](this) {
+  object venues extends MongoListField[UserVenueHistory, UserVenueHistoryEntry](this) {
     override def name = "vs"
     override def asDBObject: DBObject = {
       val dbl = new BasicDBList
@@ -129,17 +103,6 @@ object UserVenueHistory extends UserVenueHistory with MongoMetaRecord[UserVenueH
       } yield {
         UserVenueHistoryEntry(venueId, venueName, lat, lng, beenHere,
           loc.address, loc.city, loc.state, loc.country, catId)
-/*
-        UserVenueHistoryEntry2.createRecord
-          .name(venueName)
-          .lat(lat)
-          .lng(lng)
-          .beenHere(beenHere)
-          .address(loc.address)
-          .city(loc.city)
-          .state(loc.state)
-          .country(loc.country)
-*/
       }
     })
   }
@@ -148,7 +111,7 @@ object UserVenueHistory extends UserVenueHistory with MongoMetaRecord[UserVenueH
     UserVenueHistory.createRecord.id(userid)
       .setLastUpdate(new DateTime)
       .setLastRefresh(new DateTime)
-      .venues3(userHistoryList(uvh))
+      .venues(userHistoryList(uvh))
     .save
   }
 }
