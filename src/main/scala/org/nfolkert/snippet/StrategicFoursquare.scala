@@ -7,8 +7,8 @@ import xml.{Elem, NodeSeq}
 import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
 import net.liftweb.util.Props
 import net.liftweb.common.{Loggable, Full}
-import org.nfolkert.lib.{SHtmlExt, T}
 import org.nfolkert.fssc.model.{RecommendationType, PlayLevel, ViewType, UserVenueHistory, User}
+import org.nfolkert.lib.{Util, SHtmlExt, T}
 
 case class Session(token: String, user: User, userAgent: UserAgent) // TODO: additional information for current state (map bounds, zoom level, etc.)
 
@@ -50,7 +50,7 @@ object Session extends Loggable {
   }).get
 }
 
-class StrategicFoursquare extends DispatchSnippet {
+class StrategicFoursquare extends DispatchSnippet with Loggable {
   def dispatch: DispatchIt = {
     case "welcome" => welcome _
     case "renderMap" => InSession().renderMap _
@@ -64,7 +64,16 @@ class StrategicFoursquare extends DispatchSnippet {
   def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
     val url = S.uri
 
-    if (Session.session.is.isDefined) S.redirectTo("/discover")
+    S.request.map(r=>{
+      val p = Util.printReq
+      logger.info(p._1)
+      logger.info(p._2)
+    })
+
+    if (Session.session.is.isDefined) {
+      logger.info("Already logged in; redirecting to game map")
+      S.redirectTo("/discover")
+    }
 
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
