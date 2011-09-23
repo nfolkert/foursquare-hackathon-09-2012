@@ -31,18 +31,23 @@ object Session extends Loggable {
   def setup(key: String) {
     val token = if (key == "token") Props.get("access.token.user").getOrElse("test") else key
     (if (token == "test") Some(User.createRecord.id("-1")) else UserData.getUser(token)).map(user => {
+      logger.info("Logging in: " + user.id)
       Session.session(Some(Session(token, user, UserAgent.getUserAgent)))
     }).getOrElse({
+      logger.info("Could not log in; unknown user")
       Session.session.remove
-      logger.info("Could not set token; unknown user")
     })
   }
 
   def clear() {
+    logger.info(Session.session.is.map(s=>"Logging out: " + s.user.id).getOrElse("Not logged in"))
     Session.session.remove()
   }
 
-  def getOrRedirect: Session = Session.session.is.map(identity).orElse(S.redirectTo("/")).get
+  def getOrRedirect: Session = Session.session.is.map(identity).orElse({
+    logger.info("Not logged in; redirecting to index")
+    S.redirectTo("/")
+  }).get
 }
 
 class StrategicFoursquare extends DispatchSnippet {
