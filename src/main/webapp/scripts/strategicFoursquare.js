@@ -106,18 +106,20 @@ function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
         icon: r.catIcon
       })
       var eventFn = function() {
-        var content = document.createElement("div")
-        var addLine = function(header, body, parent) {
-          if (body) {
-            var subdiv = document.createElement("div")
-            parent.appendChild(subdiv)
-            subdiv.appendChild(document.createTextNode(header + ": " + body))
-          }
-        }
-        addLine("Name", r.name, content)
-        addLine("Type", r.catName, content)
-        addLine("Address", r.address, content)
-        infowindow.setContent(content)
+        var id = r.id
+
+        var isIphone = navigator.userAgent.indexOf('iPhone') >= 0
+        var webLink = 'https://foursquare.com/venue/'+id;
+        var iphoneLink = 'foursquare://venue/'+id;
+        var link = (isIphone ? iphoneLink : webLink)
+        var target = (!isIphone ? 'target="_blank"' : '')
+
+        var html = '<div style="text-align:left">' +
+          '<div><a href="' + link + '" ' + target + '>' + r.name + '</a></div>' +
+          (r.catName ? '<div>' + r.catName + '</div>' : '') +
+          (r.address ? '<div>' + r.address + '</div>' : '') +
+        '</div>'
+        infowindow.setContent(html)
         openInfoWindow(map, marker)
       }
       google.maps.event.addListener(marker, 'click', eventFn);

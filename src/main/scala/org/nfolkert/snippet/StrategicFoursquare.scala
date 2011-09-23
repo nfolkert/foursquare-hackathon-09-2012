@@ -33,7 +33,7 @@ object Session extends Loggable {
   }
 }
 
-case class RecVenue(name: String, lat: Double, lng: Double, catIcon: Option[String], catName: Option[String], address: Option[String])
+case class RecVenue(name: String, lat: Double, lng: Double, id: String, catIcon: Option[String], catName: Option[String], address: Option[String])
 
 class StrategicFoursquare extends DispatchSnippet {
   implicit val formats = DefaultFormats
@@ -183,9 +183,10 @@ class StrategicFoursquare extends DispatchSnippet {
             val catIcon = cat.map(_.icon)
             val catName = cat.map(_.name)
             val name = d.venue.name
+            val id = d.venue.id
             val address = d.venue.location.address
             for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
               Printer.compact(JsonAST.render(json))
             }
           })
@@ -203,12 +204,6 @@ class StrategicFoursquare extends DispatchSnippet {
           <div>Cluster Point Count: {pts.size}</div>
           <div>Overlay Count: {rects.size}</div>
         </div>
-        /*
-          <div>Points: {visitPoints.toString}</div>
-          <div>Cluster: {cluster.toString}</div>
-          <div>Overlays: {rects.toString}</div>
-        </div>
-        */
 
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
@@ -355,9 +350,10 @@ class StrategicFoursquare extends DispatchSnippet {
             val catIcon = cat.map(_.icon)
             val catName = cat.map(_.name)
             val name = d.venue.name
+            val id = d.venue.id
             val address = d.venue.location.address
             for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
               Printer.compact(JsonAST.render(json))
             }
           })
@@ -375,12 +371,6 @@ class StrategicFoursquare extends DispatchSnippet {
           <div>Cluster Point Count: {pts.size}</div>
           <div>Overlay Count: {rects.size}</div>
         </div>
-        /*
-          <div>Points: {visitPoints.toString}</div>
-          <div>Cluster: {cluster.toString}</div>
-          <div>Overlays: {rects.toString}</div>
-        </div>
-        */
 
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
@@ -502,9 +492,10 @@ class StrategicFoursquare extends DispatchSnippet {
             val catIcon = cat.map(_.icon)
             val catName = cat.map(_.name)
             val name = d.venue.name
+            val id = d.venue.id
             val address = d.venue.location.address
             for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, catIcon, catName, address))
+              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
               Printer.compact(JsonAST.render(json))
             }
           })
