@@ -5,8 +5,8 @@ var g4c = function() {
   var searchPos;
   var map;
 
-  var isIphone = navigator.userAgent.indexOf('iPhone') >= 0
-  var isAndroid = navigator.userAgent.indexOf('Android') >= 0
+  var isIphone = navigator.userAgent.toLowerCase().indexOf('iphone') >= 0
+  var isAndroid = navigator.userAgent.toLowerCase().indexOf('android') >= 0
   var isTouch = isIphone || isAndroid
 
   // Map Overlays
@@ -193,6 +193,7 @@ var g4c = function() {
   }
 
   function setupTouchMap() {
+    isTouch = true // Force touch mode
     var mapOptions = {
       zoom: 10,
       center: new google.maps.LatLng(40, -74),
