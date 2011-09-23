@@ -12,24 +12,23 @@
     <script src="/scripts/strategicFoursquare.js"></script>
     <script type="text/javascript">
       $(document).ready(function() {
-        isTouch = true
         if (!navigator.geolocation)
           alert("This application requires geolocation support!")
         else {
-          setupTouchMap()
+          g4c.setupTouchMap()
           var originalLat
           var originalLng
           navigator.geolocation.getCurrentPosition(function(position) {
             originalLat = position.coords.latitude
             originalLng = position.coords.longitude
-            updateCurrentPosition(originalLat, originalLng)
+            g4c.updateCurrentPosition(originalLat, originalLng)
             $('#currentLatLng').val(originalLat + ',' + originalLng).blur()
           })
           setInterval(function() {
             navigator.geolocation.getCurrentPosition(function(position) {
               var lat = position.coords.latitude
               var lng = position.coords.longitude
-              updateCurrentPosition(lat, lng)
+              g4c.updateCurrentPosition(lat, lng)
               $('#currentLatLng').val(lat + ',' + lng).blur()
             })
           }, 10000)

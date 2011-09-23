@@ -222,7 +222,7 @@ class StrategicFoursquare extends DispatchSnippet {
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
         def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
 
-        val call = "renderMap(\n" +
+        val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
           "[" + recommendationsJson + "],\n" +
           searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
@@ -230,7 +230,6 @@ class StrategicFoursquare extends DispatchSnippet {
           zoom + ", " +
           opacity + "," + redrawOverlays + ")"
 
-        val showScore = "renderScore(" + score.visited + "," + score.total + ")"
         JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
         JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
         JsCmds.SetHtml("debug", debug) &
@@ -258,11 +257,11 @@ class StrategicFoursquare extends DispatchSnippet {
            }),
            "opacity" -%> SHtmlExt.ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
              opacity = newVal
-             JsCmds.Run("updateOpacity(" + opacity + ")")
+             JsCmds.Run("g4c.updateOpacity(" + opacity + ")")
            }),
            "overlayborders" -%> SHtml.ajaxCheckbox(showOverlayBorders, (newVal) => {
              showOverlayBorders = newVal
-             JsCmds.Run("showBorders(" + showOverlayBorders + ")")
+             JsCmds.Run("g4c.showBorders(" + showOverlayBorders + ")")
            }),
            "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
            "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
@@ -366,7 +365,7 @@ class StrategicFoursquare extends DispatchSnippet {
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
         def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
 
-        val call = "renderMap(\n" +
+        val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
           "[" + recommendationsJson + "],\n" +
           searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
@@ -374,7 +373,6 @@ class StrategicFoursquare extends DispatchSnippet {
           zoom + ", " +
           opacity + "," + redrawOverlays + ")"
 
-        val showScore = "renderScore(" + score.visited + "," + score.total + ")"
         JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
         JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
         JsCmds.SetHtml("debug", debug) &
@@ -498,7 +496,7 @@ class StrategicFoursquare extends DispatchSnippet {
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
         def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
 
-        val call = "renderMap(\n" +
+        val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
           "[" + recommendationsJson + "],\n" +
           "null," +
