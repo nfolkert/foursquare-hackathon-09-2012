@@ -235,22 +235,6 @@ class StrategicFoursquare extends DispatchSnippet {
 
       val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
-      def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
-        // There is no lift ajax range slider; only a regular range slider.  Wah.
-        import net.liftweb.util.Helpers._
-        import net.liftweb.http.js.JE.JsRaw
-
-        val fHolder = S.LFuncHolder(in => in.headOption.flatMap(asDouble(_)).map(fn(_)).getOrElse(JsCmds.Noop))
-
-        val raw = (funcName: String, value: String) => JsRaw("'" + funcName + "=' + encodeURIComponent(" + value + ".value)")
-        val key = S.formFuncName
-
-        S.fmapFunc(S.contextFuncBuilder(fHolder)) {
-          funcName =>
-            <input type="range" min={min.toString} max={max.toString} step={step.toString} value={value.toString} onchange={SHtml.makeAjaxCall(raw(funcName, "this")).toJsCmd}/>
-        }
-      }
-
       bind("map", xhtml,
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
              clusterIdx = tryo(newCluster.toInt).openOr(0)
@@ -260,7 +244,7 @@ class StrategicFoursquare extends DispatchSnippet {
              gridSize = tryo(newVal.toInt).openOr(gridSize)
              generateCall(false, true)
            }),
-           "opacity" -%> ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
+           "opacity" -%> SHtmlExt.ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
              opacity = newVal
              JsCmds.Run("updateOpacity(" + opacity + ")")
            }),
