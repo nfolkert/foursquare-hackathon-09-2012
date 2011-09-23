@@ -13,7 +13,19 @@ import net.liftweb.common.{Loggable, Full}
 import org.nfolkert.lib.{SHtmlExt, T}
 import org.nfolkert.fssc.model.{RecommendationType, PlayLevel, ViewType, UserVenueHistory, User}
 
-case class Session(token: String, user: User) // TODO: additional information for current state (map bounds, zoom level, etc.)
+case class Session(token: String, user: User, userAgent: UserAgent) // TODO: additional information for current state (map bounds, zoom level, etc.)
+
+case class UserAgent(name: String)
+case object UserAgent {
+  val iPhone = UserAgent("iPhone")
+  val android = UserAgent("Android")
+  val other = UserAgent("Other")
+  def getUserAgent = S.request.flatMap(_.request.userAgent.map(identity)) match {
+    case Full(u) if u.contains("iPhone") => UserAgent.iPhone
+    case Full(u) if u.contains("Android") => UserAgent.android
+    case _ => UserAgent.other
+  }
+}
 
 object Session extends Loggable {
 
@@ -22,7 +34,7 @@ object Session extends Loggable {
   def setup(key: String) {
     val token = if (key == "token") Props.get("access.token.user").getOrElse("test") else key
     (if (token == "test") Some(User.createRecord.id("-1")) else UserData.getUser(token)).map(user => {
-      Session.session(Some(Session(token, user)))
+      Session.session(Some(Session(token, user, UserAgent.getUserAgent)))
     }).getOrElse({
       Session.session.remove
       logger.info("Could not set token; unknown user")
@@ -42,13 +54,13 @@ class StrategicFoursquare extends DispatchSnippet {
   implicit val formats = DefaultFormats
 
   def dispatch: DispatchIt = {
-    case "renderMap" => renderMap _
-    case "renderWebMap" => renderWebMap _
-    case "renderTouchMap" => renderTouchMap _
     case "welcome" => welcome _
-    case "preferences" => preferences _
-    case "discovery" => discoveryRedirect _
-    case _ => renderMap _
+    case "renderMap" => InSession().renderMap _
+    case "renderWebMap" => InSession().renderWebMap _
+    case "renderTouchMap" => InSession().renderTouchMap _
+    case "preferences" => InSession().preferences _
+    case "discovery" => InSession().discoveryRedirect _
+    case _ => welcome _
   }
 
   def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
@@ -59,83 +71,85 @@ class StrategicFoursquare extends DispatchSnippet {
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
-    }).map(t=>{Session.setup(t); discoveryRedirect(xhtml)}).getOrElse({
+    }).map(t=>{Session.setup(t); InSession().discoveryRedirect(xhtml)}).getOrElse({
       S.param("test").map(p=>{
-        Session.setup(p); discoveryRedirect(xhtml)
+        Session.setup(p); InSession().discoveryRedirect(xhtml)
       }).getOrElse({
         def renderLink(xhtml: NodeSeq): NodeSeq = {
           <a href={oauth.authorizeUrl}>{xhtml}</a>
         }
-
         bind("auth", xhtml,
              "link" -%> renderLink _)
       })
     })
   }
 
-  def discoveryRedirect(xhtml: NodeSeq): NodeSeq = {
-    S.param("display") match {
-      case Full("web") => S.redirectTo("/web_discover")
-      case Full("touch") => S.redirectTo("/touch_discover")
-      case _ => {
-        Session.session.is.map(_.user.getViewType) match {
-          case Some(ViewType.web) => S.redirectTo("/web_discover")
-          case Some(ViewType.touch) => S.redirectTo("/touch_discover")
-          case _ => {
-            S.request.flatMap(_.userAgent) match {
-              case Full(v) if v.indexOf("iPhone") >= 0 => S.redirectTo("/touch_discover")
-              case Full(v) if v.indexOf("Android") >= 0 => S.redirectTo("/touch_discover")
-              case _ => S.redirectTo("/web_discover")
+  case class InSession() {
+    val Session(token, user, userAgent) = Session.getOrRedirect
+
+    def discoveryRedirect(xhtml: NodeSeq): NodeSeq = {
+      S.param("display") match {
+        case Full("web") => S.redirectTo("/web_discover")
+        case Full("touch") => S.redirectTo("/touch_discover")
+        case _ => {
+          user.getViewType match {
+            case ViewType.web => S.redirectTo("/web_discover")
+            case ViewType.touch => S.redirectTo("/touch_discover")
+            case _ => {
+              userAgent match {
+                case UserAgent.iPhone => S.redirectTo("/touch_discover")
+                case UserAgent.android => S.redirectTo("/touch_discover")
+                case _ => S.redirectTo("/web_discover")
+              }
             }
           }
         }
       }
+      NodeSeq.Empty
     }
-    NodeSeq.Empty
-  }
 
-  def preferences(xhtml: NodeSeq): NodeSeq = {
-    val Session(token, user) = Session.getOrRedirect
+    def recommendationTypeWidget(callbackFn: RecommendationType => JsCmd, overrideVal: Option[RecommendationType]=None) = {
+      val recType = overrideVal getOrElse user.getRecommendations
+      val recommendationOpts = RecommendationType.values.map(v=>(v.name, v.desc))
+      SHtml.ajaxSelect(recommendationOpts, Full(recType.name), (newVal) => callbackFn(RecommendationType.byName(newVal)))
+    }
 
-    val viewType = user.getViewType
-    val level = user.getPlayLevel
-    val recs = user.getRecommendations
-    val mapDetail = user.opacity.value
+    def viewTypeWidget(callbackFn: ViewType => JsCmd, overrideVal: Option[ViewType]=None) = {
+      val viewType = overrideVal getOrElse user.getViewType
+      val viewOpts = ViewType.values.map(v=>(v.name, v.desc))
+      SHtml.ajaxSelect(viewOpts, Full(viewType.name), (newType) => callbackFn(ViewType.byName(newType)))
+    }
 
-    val levelOpts = PlayLevel.values.map(v=>(v.name, v.desc))
-    val viewOpts = ViewType.values.map(v=>(v.name, v.desc))
-    val recommendationOpts = RecommendationType.values.map(v=>(v.name, v.desc))
+    def playLevelWidget(callbackFn: PlayLevel => JsCmd, overrideVal: Option[PlayLevel]=None) = {
+      val level = overrideVal getOrElse user.getPlayLevel
+      val levelOpts = PlayLevel.values.map(v=>(v.name, v.desc))
+      SHtml.ajaxSelect(levelOpts, Full(level.name), (newLevel) => callbackFn(PlayLevel.byName(newLevel)))
+    }
 
-    bind("prefs", xhtml,
-         "level" -%> SHtml.ajaxSelect(levelOpts, Full(level.name), (newLevel) => {
-           PlayLevel.values.find(_.name == newLevel).map(nl=>user.setPlayLevel(nl).save); JsCmds.Noop
-         }),
-         "viewtypes" -%> SHtml.ajaxSelect(viewOpts, Full(viewType.name), (newType) => {
-           ViewType.values.find(_.name == newType).map(nt=>user.setViewType(nt).save); JsCmds.Noop
-         }),
-         "opacity" -%> SHtmlExt.ajaxRange(0.333, 1.0, 0.05, mapDetail, (newVal) => {
-           user.opacity(newVal).save; JsCmds.Noop
-         }),
-         "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full(recs.name), (newVal) => {
-           RecommendationType.values.find(_.name == newVal).map(rc=>user.setRecommendations(rc).save); JsCmds.Noop
-         }),
-         "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
-         "refreshdata" -%> SHtml.ajaxButton("Refresh", () => {
-           Session.setup(token)
-           UserData.fetchUserVenueHistory(user.id.value, token)
-           JsCmds.Alert("Data refreshed")
-         }),
-         "deletedata" -%> SHtml.ajaxButton("Clear", () => {
-           UserVenueHistory.find(user.id.value).map(_.delete_!)
-           Session.clear;
-           JsCmds.RedirectTo("/")
-         })
-    )
-  }
+    def preferences(xhtml: NodeSeq): NodeSeq = {
+      val mapDetail = user.opacity.value
+      bind("prefs", xhtml,
+           "level" -%> playLevelWidget(newLevel => { user.setPlayLevel(newLevel).save; JsCmds.Noop }),
+           "viewtypes" -%> viewTypeWidget(newType => { user.setViewType(newType).save; JsCmds.Noop }),
+           "recommendations" -%> recommendationTypeWidget(newVal => { user.setRecommendations(newVal).save; JsCmds.Noop }),
+           "opacity" -%> SHtmlExt.ajaxRange(0.333, 1.0, 0.05, mapDetail, (newVal) => {
+             user.opacity(newVal).save; JsCmds.Noop
+           }),
+           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
+           "refreshdata" -%> SHtml.ajaxButton("Refresh", () => {
+             Session.setup(token)
+             UserData.fetchUserVenueHistory(user.id.value, token)
+             JsCmds.Alert("Data refreshed")
+           }),
+           "deletedata" -%> SHtml.ajaxButton("Clear", () => {
+             UserVenueHistory.find(user.id.value).map(_.delete_!)
+             Session.clear;
+             JsCmds.RedirectTo("/")
+           })
+      )
+    }
 
   def renderMap(xhtml: NodeSeq): NodeSeq = T("Render Map") {
-    val Session(token, user) = Session.getOrRedirect
-
     val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
     val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
@@ -280,8 +294,6 @@ class StrategicFoursquare extends DispatchSnippet {
   }
 
   def renderWebMap(xhtml: NodeSeq): NodeSeq = {
-    val Session(token, user) = Session.getOrRedirect
-
     val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
     val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
@@ -415,7 +427,6 @@ class StrategicFoursquare extends DispatchSnippet {
   }
 
   def renderTouchMap(xhtml: NodeSeq): NodeSeq = {
-    val Session(token, user) = Session.getOrRedirect
     val url = S.uri
 
     var initialLatLng: Option[(Double, Double)] = None
@@ -522,5 +533,7 @@ class StrategicFoursquare extends DispatchSnippet {
            } else JsCmds.Noop
          })
     )
+  }
+
   }
 }

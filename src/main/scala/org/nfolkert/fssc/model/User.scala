@@ -5,20 +5,21 @@ import org.scalafoursquare.response.{UserDetail}
 import org.nfolkert.lib.Util
 import net.liftweb.record.field.{DoubleField, LongField, StringField}
 
-trait ModelConstant {
+trait ModelConstant[T] {
   def name: String
 }
 
-case class ViewType(name: String, desc: String) extends ModelConstant
+case class ViewType(name: String, desc: String) extends ModelConstant[ViewType]
 case object ViewType {
   val touch = ViewType("touch", "Touch Style")
   val web = ViewType("web", "Web Style")
   val calculate = ViewType("calculate", "Find From Device")
   val values = List(touch, web, calculate)
   val defaultValue = calculate
+  def byName(str: String) = values.find(_.name == str).getOrElse(defaultValue)
 }
 
-case class PlayLevel(name: String, desc: String, gridSize: Int) extends ModelConstant
+case class PlayLevel(name: String, desc: String, gridSize: Int) extends ModelConstant[PlayLevel]
 case object PlayLevel {
   val easy = PlayLevel("easy", "Beginner - Neighborhood", 1500)
   val medium = PlayLevel("medium", "Intermediate", 500)
@@ -26,9 +27,10 @@ case object PlayLevel {
   val expert = PlayLevel("expert", "Expert - Block", 100)
   val values = List(easy, medium, advanced, expert)
   val defaultValue = medium
+  def byName(str: String) = values.find(_.name == str).getOrElse(defaultValue)
 }
 
-case class RecommendationType(name: String, desc: String) extends ModelConstant
+case class RecommendationType(name: String, desc: String) extends ModelConstant[RecommendationType]
 object RecommendationType {
   val none = RecommendationType("none", "No Recommendations")
   val food = RecommendationType("food", "Food")
@@ -40,6 +42,7 @@ object RecommendationType {
   val all = RecommendationType("all", "All Categories")
   val values = List(none, food, drinks, coffee, shops, arts, outdoors, all)
   val defaultValue = none
+  def byName(str: String) = values.find(_.name == str).getOrElse(defaultValue)
 }
 
 class User extends MongoRecord[User] {
