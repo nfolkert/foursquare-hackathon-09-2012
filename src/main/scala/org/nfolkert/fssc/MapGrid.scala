@@ -2,6 +2,7 @@ package org.nfolkert.fssc
 
 import org.joda.time.DateTime
 import org.scalafoursquare.response.VenueCompact
+import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
 
 case class DataPoint[T](lat: Double, lng: Double, data: Option[T]=None) {
 
@@ -25,7 +26,38 @@ object DataPoint {
 
 case class VisitData(visits: Int=0, name: String="", lastVisit: DateTime=new DateTime) {}
 
-case class RecData(venue: VenueCompact) {}
+object VisitData {
+  def clusterName(cluster: Cluster[VisitData]) = {
+    val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
+    grouped.map(_._1).headOption.getOrElse(cluster.anchor.lat + ", " + cluster.anchor.lng)
+  }
+}
+
+case class RecData(venue: VenueCompact) {
+  def toJson = RecData.toJson(this)
+}
+case class RecVenue(name: String, lat: Double, lng: Double, id: String, catIcon: Option[String], catName: Option[String], address: Option[String])
+
+object RecData {
+  implicit val formats = DefaultFormats
+
+  def toJson(data: RecData) = {
+    val cat = data.venue.categories.find(_.primary.getOrElse(false))
+    val catIcon = cat.map(_.icon)
+    val catName = cat.map(_.name)
+    val name = data.venue.name
+    val id = data.venue.id
+    val address = data.venue.location.address
+    for {lat <- data.venue.location.lat; lng <- data.venue.location.lng} yield {
+      val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
+      Printer.compact(JsonAST.render(json))
+    }
+  }
+
+  def pointToJson(pt: DataPoint[RecData]) = {
+    pt.data.flatMap(_.toJson)
+  }
+}
 
 case class Rectangle(left: Double, bottom: Double, right: Double, top: Double) {
   def isEmpty = right <= left || top <= bottom
@@ -185,6 +217,14 @@ case class MapGrid(latGridSizeInMeters: Int,
 
   def snapPoints[T](pts: Set[DataPoint[T]]): Set[DataPoint[T]] = {
     pts.map(pt=>snapPoint(pt))
+  }
+
+  def mapToGrid[T](pts: Set[DataPoint[T]]): Map[(Double, Double), Set[DataPoint[T]]] = {
+    pts.map(pt=>{
+      val snapped = snapPoint(pt)
+      val key = (snapped.lat, snapped.lng)
+      (key, pt)
+    }).groupBy(_._1).map(p=>(p._1, p._2.map(_._2)))
   }
 
   protected def combineSnapPoints(pts: Set[DataPoint[VisitData]]): Set[DataPoint[VisitData]] = {

@@ -1,12 +1,9 @@
 package org.nfolkert.snippet
 
 import net.liftweb.util.Helpers._
-import org.joda.time.DateTime
-import net.liftweb.http.js.{JsCmds, JsCmd, JE}
-import org.scalafoursquare.auth.OAuthFlow
-import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S, StatefulSnippet}
-import xml.{Elem, Unparsed, NodeSeq, Text}
-import net.liftweb.json.{DefaultFormats, JsonAST, Printer, Extraction}
+import net.liftweb.http.js.{JsCmds, JsCmd}
+import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S}
+import xml.{Elem, NodeSeq}
 import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
 import net.liftweb.util.Props
 import net.liftweb.common.{Loggable, Full}
@@ -48,11 +45,7 @@ object Session extends Loggable {
   def getOrRedirect: Session = Session.session.is.map(identity).orElse(S.redirectTo("/")).get
 }
 
-case class RecVenue(name: String, lat: Double, lng: Double, id: String, catIcon: Option[String], catName: Option[String], address: Option[String])
-
 class StrategicFoursquare extends DispatchSnippet {
-  implicit val formats = DefaultFormats
-
   def dispatch: DispatchIt = {
     case "welcome" => welcome _
     case "renderMap" => InSession().renderMap _
@@ -149,60 +142,40 @@ class StrategicFoursquare extends DispatchSnippet {
       )
     }
 
-  def renderMap(xhtml: NodeSeq): NodeSeq = T("Render Map") {
-    val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
-    val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
+    def renderMap(xhtml: NodeSeq): NodeSeq = T("Render Map") {
+      val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+      val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
-    def clusterName(cluster: Cluster[VisitData]): String = {
-      val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
-      grouped.map(_._1).headOption.getOrElse(cluster.anchor.lat + ", " + cluster.anchor.lng)
-    }
+      if (!clusters.isEmpty) {
+        var clusterIdx = 0//clusters.length-1
+        var gridSize = 250
+        var opacity = 1.0
+        var searchLatLng: Option[(Double, Double)] = None
+        var showOverlayBorders = false
+        var recType = "none"
 
-    if (!clusters.isEmpty) {
-      var clusterIdx = 0//clusters.length-1
-      var gridSize = 250
-      var opacity = 1.0
-      var searchLatLng: Option[(Double, Double)] = None
-      var showOverlayBorders = false
-      var recType = "none"
+        def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
+          val cluster = if (clusterIdx < 0) {
+            Cluster(visitPoints(0), visitPoints.toSet)
+          } else
+            clusters(clusterIdx)
+          val pts = cluster.pts
+          val bounds = cluster.bounds
+          if (searchLatLng.isEmpty || resetZoom) {
+            searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+          }
 
-      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
-        val cluster = if (clusterIdx < 0) {
-          Cluster(visitPoints(0), visitPoints.toSet)
-        } else
-          clusters(clusterIdx)
-        val pts = cluster.pts
-        val bounds = cluster.bounds
-        if (searchLatLng.isEmpty || resetZoom) {
-          searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
-        }
+          val grid = MapGrid(gridSize, 1.5, pts)
+          val sw = grid.snapPoint(bounds._1)
+          val ne = grid.snapPoint(bounds._2)
+          val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
 
-        val grid = MapGrid(gridSize, 1.5, pts)
-        val sw = grid.snapPoint(bounds._1)
-        val ne = grid.snapPoint(bounds._2)
-        val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
-
-        val covered = T("Covered Cells") { grid.covered }
-        val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
-        val recPts = searchLatLng.map(p => {
-          val (lat, lng) = p
-          UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
-        }).getOrElse(Nil)
-
-        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
-          pt.data.flatMap(d => {
-            val cat = d.venue.categories.find(_.primary.getOrElse(false))
-            val catIcon = cat.map(_.icon)
-            val catName = cat.map(_.name)
-            val name = d.venue.name
-            val id = d.venue.id
-            val address = d.venue.location.address
-            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
-              Printer.compact(JsonAST.render(json))
-            }
-          })
-        }
+          val covered = T("Covered Cells") { grid.covered }
+          val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
+          val recPts = searchLatLng.map(p => {
+            val (lat, lng) = p
+            UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
+          }).getOrElse(Nil)
 
         val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
         val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
@@ -220,7 +193,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
-        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
         val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
@@ -244,7 +217,7 @@ class StrategicFoursquare extends DispatchSnippet {
         ("all", "All Categories")
       )
 
-      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
       bind("map", xhtml,
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
@@ -296,11 +269,6 @@ class StrategicFoursquare extends DispatchSnippet {
     val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
     val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
-    def clusterName(cluster: Cluster[VisitData]): String = {
-      val grouped = cluster.pts.toList.flatMap(_.data).map(_.name).groupBy(n=>n).toList.sortBy(-_._2.size)
-      grouped.map(_._1).headOption.getOrElse(cluster.anchor.lat + ", " + cluster.anchor.lng)
-    }
-
     if (!clusters.isEmpty) {
       var clusterIdx = 0
       val gridSize = user.getPlayLevel.gridSize
@@ -332,21 +300,6 @@ class StrategicFoursquare extends DispatchSnippet {
           UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
         }).getOrElse(Nil)
 
-        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
-          pt.data.flatMap(d => {
-            val cat = d.venue.categories.find(_.primary.getOrElse(false))
-            val catIcon = cat.map(_.icon)
-            val catName = cat.map(_.name)
-            val name = d.venue.name
-            val id = d.venue.id
-            val address = d.venue.location.address
-            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
-              Printer.compact(JsonAST.render(json))
-            }
-          })
-        }
-
         val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
         val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
 
@@ -363,7 +316,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
-        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
         val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
@@ -387,7 +340,7 @@ class StrategicFoursquare extends DispatchSnippet {
         ("all", "All Categories")
       )
 
-      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
       def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
         // There is no lift ajax range slider; only a regular range slider.  Wah.
@@ -470,21 +423,6 @@ class StrategicFoursquare extends DispatchSnippet {
           UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
         }).getOrElse(Nil)
 
-        def recPointToJson(pt: DataPoint[RecData]): Option[String] = {
-          pt.data.flatMap(d => {
-            val cat = d.venue.categories.find(_.primary.getOrElse(false))
-            val catIcon = cat.map(_.icon)
-            val catName = cat.map(_.name)
-            val name = d.venue.name
-            val id = d.venue.id
-            val address = d.venue.location.address
-            for {lat <- d.venue.location.lat; lng <- d.venue.location.lng} yield {
-              val json = Extraction.decompose(RecVenue(name, lat, lng, id, catIcon, catName, address))
-              Printer.compact(JsonAST.render(json))
-            }
-          })
-        }
-
         val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
         val breadth = (math.max(boundRect.height, boundRect.length) * grid.metersInDegLat) / 10
 
@@ -494,7 +432,7 @@ class StrategicFoursquare extends DispatchSnippet {
         val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
-        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>recPointToJson(pt)).join(",") }
+        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
         val call = "g4c.renderMap(\n" +
           (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +

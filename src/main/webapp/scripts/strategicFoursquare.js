@@ -165,10 +165,10 @@ var g4c = function() {
       searchPos = new google.maps.Marker({
         position: new google.maps.LatLng(lat, lng),
         map: map,
-        clickable: !forTouch,
-        draggable: !forTouch
+        clickable: !isTouch,
+        draggable: !isTouch
       })
-      if (!forTouch) {
+      if (!isTouch) {
         google.maps.event.addListener(searchPos, 'dragstart', function() {
           closeInfoWindow()
         });
