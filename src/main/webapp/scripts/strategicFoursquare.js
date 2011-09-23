@@ -48,8 +48,8 @@ var g4c = function() {
   }
 
   function updateOpacity(opacity) {
-    stickyDefaults.fillOpacity = opacity
-    updateRects()
+    setOverlayOpacity(opacity)
+    redrawOverlays()
   }
 
   function showBorders(show) {
@@ -58,10 +58,10 @@ var g4c = function() {
     } else {
       stickyDefaults.strokeWeight = 0
     }
-    updateRects()
+    redrawOverlays()
   }
 
-  function updateRects() {
+  function redrawOverlays() {
     for (var i = 0; i < overlays.length; i++) {
       var bounds = overlays[i].getBounds()
       var opts = defaultOptions(map, bounds)
@@ -106,42 +106,37 @@ var g4c = function() {
     }
   }
 
-  function renderMap(rects, inRecs, pos, center, zoom, opacity, redrawOverlays) {
-    stickyDefaults.fillOpacity = opacity
-    if (redrawOverlays) {
+  function resetCenterAndZoom(lat, lng, zoom) {
+    map.setZoom(zoom)
+    map.panTo(new google.maps.LatLng(lat, lng))
+  }
+
+  function setOverlayOpacity(opacity) { stickyDefaults.fillOpacity = opacity }
+
+  function renderMap(rects) {
     // Clear existing overlays
-      for (var i = 0; i < overlays.length; i++)
-        overlays[i].setMap(null)
-      overlays.length = 0
+    for (var i = 0; i < overlays.length; i++)
+      overlays[i].setMap(null)
+    overlays.length = 0
 
-      for (var i = 0; i < rects.length; i++) {
-        var r = rects[i]
-        var rectBounds = toBounds(r)
-        var rect = new google.maps.Rectangle();
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i]
+      var rectBounds = toBounds(r)
+      var rect = new google.maps.Rectangle();
 
-        var opts = defaultOptions(map, rectBounds)
+      var opts = defaultOptions(map, rectBounds)
 
-        rect.setOptions(opts)
-        google.maps.event.addListener(rect, 'click', function(event) {
-          if (isTouch && !windowopen) {
-            var lat = event.latLng.lat()
-            var lng = event.latLng.lng()
-            updateSearchPosition(lat, lng)
-            $('#searchLatLng').val(lat + ',' + lng).blur()
-          }
-          closeInfoWindow()
-        });
-
-        overlays.push(rect)
-      }
-    }
-    renderRecommendations(inRecs)
-
-    if (pos) updateSearchPosition(pos[0], pos[1])
-
-    if (center) {
-      map.setZoom(zoom)
-      map.panTo(new google.maps.LatLng(center[0], center[1]))
+      rect.setOptions(opts)
+      google.maps.event.addListener(rect, 'click', function(event) {
+        if (isTouch && !windowopen) {
+          var lat = event.latLng.lat()
+          var lng = event.latLng.lng()
+          updateSearchPosition(lat, lng)
+          $('#searchLatLng').val(lat + ',' + lng).blur()
+        }
+        closeInfoWindow()
+      });
+      overlays.push(rect)
     }
   }
 
@@ -228,7 +223,10 @@ var g4c = function() {
     updateSearchPosition: updateSearchPosition,
 
     renderMap: renderMap,
+    redrawOverlays: redrawOverlays,
     renderRecommendations: renderRecommendations,
+    setOverlayOpacity: setOverlayOpacity,
+    resetCenterAndZoom: resetCenterAndZoom,
 
     updateOpacity: updateOpacity,
     showBorders: showBorders

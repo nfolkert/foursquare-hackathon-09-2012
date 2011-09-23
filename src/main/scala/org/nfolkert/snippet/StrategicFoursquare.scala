@@ -119,6 +119,13 @@ class StrategicFoursquare extends DispatchSnippet {
       SHtml.ajaxSelect(levelOpts, Full(level.name), (newLevel) => callbackFn(PlayLevel.byName(newLevel)))
     }
 
+    def updateSearchCall(lat: Double, lng: Double) = "g4c.updateSearchPosition("+lat+","+lng+")"
+    def setOpacityCall(opacity: Double) = "g4c.setOverlayOpacity("+opacity+")"
+    def renderRecsCall(json: String) = "g4c.renderRecommendations([" + json + "])"
+    def resetViewCall(lat: Double, lng: Double, zoom: Int) = "g4c.resetCenterAndZoom("+lat+","+lng+","+zoom+")"
+    def renderMapCall(json: String) = "g4c.renderMap([" + json + "])"
+    def redrawOverlaysCall = "g4c.redrawOverlays()"
+
     def preferences(xhtml: NodeSeq): NodeSeq = {
       val mapDetail = user.opacity.value
       bind("prefs", xhtml,
@@ -177,93 +184,84 @@ class StrategicFoursquare extends DispatchSnippet {
             UserData.getRecommendedPoints(lat, lng, rects.toSet, recType, token).toList
           }).getOrElse(Nil)
 
-        val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
-        val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+          val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
+          val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
 
-        val eqScale = math.log(breadth).toInt
-        val zoom = math.max(1, 18 - (eqScale-2))
+          val eqScale = math.log(breadth).toInt
+          val zoom = math.max(1, 18 - (eqScale-2))
 
-        val debug = <div>
-          <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
-          <div>Total Point Count: {visitPoints.size}</div>
-          <div>Cluster Point Count: {pts.size}</div>
-          <div>Overlay Count: {rects.size}</div>
-        </div>
+          val debug = <div>
+            <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
+            <div>Total Point Count: {visitPoints.size}</div>
+            <div>Cluster Point Count: {pts.size}</div>
+            <div>Overlay Count: {rects.size}</div>
+          </div>
 
-        val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+          val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
 
-        def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
-        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
+          def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
+          def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
-        val call = "g4c.renderMap(\n" +
-          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
-          "[" + recommendationsJson + "],\n" +
-          searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
-          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
-          zoom + ", " +
-          opacity + "," + redrawOverlays + ")"
+          val call = "g4c.renderMap(\n" +
+            (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
+            "[" + recommendationsJson + "],\n" +
+            searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
+            (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
+            zoom + ", " +
+            opacity + "," + redrawOverlays + ")"
 
-        JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
-        JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
-        JsCmds.SetHtml("debug", debug) &
-        JsCmds.Run(call)
-      }
+          JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
+          JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
+          JsCmds.SetHtml("debug", debug) &
+          JsCmds.Run(setOpacityCall(opacity)) &
+          (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
+          JsCmds.Run(renderRecsCall(recommendationsJson)) &
+          (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop) &
+          searchLatLng.map(p=>JsCmds.Run(updateSearchCall(p._1, p._2))).getOrElse(JsCmds.Noop)
+        }
 
-      val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
+        val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
 
-      val recommendationOpts = List(
-        ("none", "No Recommendations"),
-        ("food", "Food"), ("drinks", "Drinks"), ("coffee", "Coffee"), ("shops", "Shopping"), ("arts", "Arts and Entertainment"), ("outdoors", "Outdoors"),
-        ("all", "All Categories")
-      )
+        val recommendationOpts = List(
+          ("none", "No Recommendations"),
+          ("food", "Food"), ("drinks", "Drinks"), ("coffee", "Coffee"), ("shops", "Shopping"), ("arts", "Arts and Entertainment"), ("outdoors", "Outdoors"),
+          ("all", "All Categories"))
 
-      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+        val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
 
-      bind("map", xhtml,
-           "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
-             clusterIdx = tryo(newCluster.toInt).openOr(0)
-             generateCall(true, true)
-           }),
-           "gridsize" -%> SHtml.ajaxSelect(gridSizeOpts, Full("250"), (newVal) => {
-             gridSize = tryo(newVal.toInt).openOr(gridSize)
-             generateCall(false, true)
-           }),
-           "opacity" -%> SHtmlExt.ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
-             opacity = newVal
-             JsCmds.Run("g4c.updateOpacity(" + opacity + ")")
-           }),
-           "overlayborders" -%> SHtml.ajaxCheckbox(showOverlayBorders, (newVal) => {
-             showOverlayBorders = newVal
-             JsCmds.Run("g4c.showBorders(" + showOverlayBorders + ")")
-           }),
-           "logout" -%> SHtml.ajaxButton("Logout", () => {Session.clear; JsCmds.RedirectTo("/")}),
-           "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
-             val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
-             if (asList.size == 2) {
-               searchLatLng = Some(asList(0), asList(1))
+        bind("map", xhtml,
+             "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
+               clusterIdx = tryo(newCluster.toInt).openOr(0)
+               generateCall(true, true)
+             }),
+             "gridsize" -%> SHtml.ajaxSelect(gridSizeOpts, Full("250"), (newVal) => {
+               gridSize = tryo(newVal.toInt).openOr(gridSize)
+               generateCall(false, true)
+             }),
+             "opacity" -%> SHtmlExt.ajaxRange(0.0, 1.0, 0.05, opacity, (newVal) => {
+               opacity = newVal
+               JsCmds.Run("g4c.updateOpacity(" + opacity + ")")
+             }),
+             "overlayborders" -%> SHtml.ajaxCheckbox(showOverlayBorders, (newVal) => {
+               showOverlayBorders = newVal
+               JsCmds.Run("g4c.showBorders(" + showOverlayBorders + ")")
+             }),
+             "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
+               val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+               if (asList.size == 2) {
+                 searchLatLng = Some(asList(0), asList(1))
+                 generateCall(false, false)
+               } else JsCmds.Noop
+             }),
+             "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full("none"), (newVal) => {
+               recType = newVal
                generateCall(false, false)
-             } else JsCmds.Noop
-
-           }),
-           "recommendations" -%> SHtml.ajaxSelect(recommendationOpts, Full("none"), (newVal) => {
-             recType = newVal
-             generateCall(false, false)
-           }),
-           "refreshdata" -%> SHtml.ajaxButton("Refresh", () => {
-             Session.setup(token)
-             UserData.fetchUserVenueHistory(user.id.value, token)
-             JsCmds.Alert("Data refreshed")
-           }),
-           "deletedata" -%> SHtml.ajaxButton("Clear", () => {
-             UserVenueHistory.find(user.id.value).map(_.delete_!)
-             Session.clear;
-             JsCmds.RedirectTo("/")
-           })
-      )
+             })
+        )
+      }
+      else
+        xhtml
     }
-    else
-      xhtml
-  }
 
   def renderWebMap(xhtml: NodeSeq): NodeSeq = {
     val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
@@ -318,45 +316,17 @@ class StrategicFoursquare extends DispatchSnippet {
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
         def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
-        val call = "g4c.renderMap(\n" +
-          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
-          "[" + recommendationsJson + "],\n" +
-          searchLatLng.map(p=>"[" + p._1 + "," + p._2 + "],").getOrElse("") +
-          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
-          zoom + ", " +
-          opacity + "," + redrawOverlays + ")"
-
         JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
         JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
         JsCmds.SetHtml("debug", debug) &
-        JsCmds.Run(call)
+        JsCmds.Run(setOpacityCall(opacity)) &
+        (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
+        JsCmds.Run(renderRecsCall(recommendationsJson)) &
+        (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop) &
+        searchLatLng.map(p=>JsCmds.Run(updateSearchCall(p._1, p._2))).getOrElse(JsCmds.Noop)
       }
-
-      val gridSizeOpts = List(10, 100, 250, 400, 800, 1000, 5000, 10000, 40000, 100000).map(m=>(m.toString, if (m < 1000) {m + " m"} else {m/1000 + " km"}))
-
-      val recommendationOpts = List(
-        ("none", "No Recommendations"),
-        ("food", "Food"), ("drinks", "Drinks"), ("coffee", "Coffee"), ("shops", "Shopping"), ("arts", "Arts and Entertainment"), ("outdoors", "Outdoors"),
-        ("all", "All Categories")
-      )
 
       val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
-
-      def ajaxRange(min: Double, max: Double, step: Double, value: Double, fn: Double => JsCmd, attrs: SHtml.ElemAttr*): Elem = {
-        // There is no lift ajax range slider; only a regular range slider.  Wah.
-        import net.liftweb.util.Helpers._
-        import net.liftweb.http.js.JE.JsRaw
-
-        val fHolder = S.LFuncHolder(in => in.headOption.flatMap(asDouble(_)).map(fn(_)).getOrElse(JsCmds.Noop))
-
-        val raw = (funcName: String, value: String) => JsRaw("'" + funcName + "=' + encodeURIComponent(" + value + ".value)")
-        val key = S.formFuncName
-
-        S.fmapFunc(S.contextFuncBuilder(fHolder)) {
-          funcName =>
-            <input type="range" min={min.toString} max={max.toString} step={step.toString} value={value.toString} onchange={SHtml.makeAjaxCall(raw(funcName, "this")).toJsCmd}/>
-        }
-      }
 
       bind("map", xhtml,
            "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
@@ -434,15 +404,10 @@ class StrategicFoursquare extends DispatchSnippet {
         def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
         def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
 
-        val call = "g4c.renderMap(\n" +
-          (if (redrawOverlays) "[" + overlaysJson + "],\n" else "[],") +
-          "[" + recommendationsJson + "],\n" +
-          "null," +
-          (if (resetZoom) {"[" + center._1 + "," + center._2 + "],"} else {"null,"}) +
-          zoom + ", " +
-          opacity + "," + redrawOverlays + ")"
-
-        JsCmds.Run(call)
+        JsCmds.Run(setOpacityCall(opacity)) &
+        (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
+        JsCmds.Run(renderRecsCall(recommendationsJson)) &
+        (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop)
       }).getOrElse(JsCmds.Noop)
     }
 
