@@ -70,10 +70,13 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
       logger.info(p._2)
     })
 
+    /*
+    // Uncomment to dump the request information
     if (Session.session.is.isDefined) {
       logger.info("Already logged in; redirecting to game map")
       S.redirectTo("/discover")
     }
+    */
 
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
@@ -311,7 +314,7 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
 
         val center = searchLatLng.getOrElse((cluster.anchor.lat, cluster.anchor.lng))
 
-        val zoom = user.getPlayLevel.initialZoom-1
+        val zoom = user.getPlayLevel.initialZoom
 
         val debug = <div>
           <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
