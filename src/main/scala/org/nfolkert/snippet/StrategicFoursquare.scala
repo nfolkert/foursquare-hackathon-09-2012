@@ -160,6 +160,7 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
            }),
            "deletedata" -%> SHtml.ajaxButton("Clear", () => {
              UserVenueHistory.find(user.id.value).map(_.delete_!)
+             User.find(user.id.value).map(_.delete_!)
              Session.clear;
              JsCmds.RedirectTo("/")
            })
