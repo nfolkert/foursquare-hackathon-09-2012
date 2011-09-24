@@ -41,7 +41,7 @@ object RecommendationType {
   val outdoors = RecommendationType("outdoors", "Outdoors")
   val all = RecommendationType("all", "All Categories")
   val values = List(none, food, drinks, coffee, shops, arts, outdoors, all)
-  val defaultValue = none
+  val defaultValue = all
   def byName(str: String) = values.find(_.name == str).getOrElse(defaultValue)
 }
 
@@ -80,7 +80,7 @@ class User extends MongoRecord[User] {
 
   object opacity extends DoubleField(this) {
     override def name = "op"
-    override def defaultValue = 1.0
+    override def defaultValue = 0.7
   }
 }
 
