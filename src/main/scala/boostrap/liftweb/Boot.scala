@@ -11,6 +11,7 @@ import Loc._
 import org.nfolkert.fssc.model.MongoSetup
 import org.scalafoursquare.call.App
 import org.scalafoursquare.call.App.CallLogger
+import org.nfolkert.fssc.UserData
 
 /**
  * A class that's instantiated early and run.  It allows the application
@@ -56,6 +57,7 @@ class Boot {
     // Force the request to be UTF-8
     LiftRules.early.append(_.setCharacterEncoding("UTF-8"))
 
+    UserData.initCaches
   }
 }
 

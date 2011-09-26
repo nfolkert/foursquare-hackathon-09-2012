@@ -39,6 +39,7 @@ object RecommendationType {
   val shops = RecommendationType("shops", "Shopping")
   val arts = RecommendationType("arts", "Arts & Entertainment")
   val outdoors = RecommendationType("outdoors", "Outdoors")
+  val travel = RecommendationType("travel", "Travel")
   val all = RecommendationType("all", "All Categories")
   val values = List(none, food, drinks, coffee, shops, arts, outdoors, all)
   val defaultValue = all

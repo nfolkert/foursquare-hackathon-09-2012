@@ -1,13 +1,13 @@
 package org.nfolkert.fssc
 
-import model.{UserVenueHistoryEntry, UserVenueHistory, User}
-import org.scalafoursquare.call.{HttpCaller, AuthApp}
+import model.{VenueCategories, UserVenueHistoryEntry, UserVenueHistory, User}
 import net.liftweb.util.Props
 import org.joda.time.DateTime
 import org.scalafoursquare.auth.OAuthFlow
 import org.scalafoursquare.response.{Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
 import org.nfolkert.lib.{T, Util}
 import net.liftweb.common.{Full, Loggable, Box}
+import org.scalafoursquare.call.{UserlessApp, HttpCaller, AuthApp}
 
 object UserData extends Loggable {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -20,7 +20,7 @@ object UserData extends Loggable {
   }
 
   def getApp(token: String) = new AuthApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000), token)
-
+  def getUserlessApp = new UserlessApp(HttpCaller(CLIENT_ID, CLIENT_SECRET, readTimeout=10000))
 
   def getUser(token: String): Option[User] = {
     val app = getApp(token)
@@ -99,13 +99,15 @@ object UserData extends Loggable {
     }
   }
 
+  val MAX_IDLE_DAYS_TO_REFRESH = 7
+  val MAX_DAYS_TO_REFRESH = 30
+
   def updateUserVenueHistory(token: String, userid: String, history: UserVenueHistory): Box[UserVenueHistory] = T("Update UserVenueHistory") {
     val lastUpdateSeconds = history.lastUpdate.value
     val lastRefreshSeconds = history.lastRefresh.value
 
-    // If no updates have been made in a month, or last full rebuild is older than 6 months, do complete rebuild
-    if (Util.dateFromSeconds(lastUpdateSeconds).isBefore(new DateTime().minusDays(30)) ||
-        Util.dateFromSeconds(lastRefreshSeconds).isBefore(new DateTime().minusDays(180)))
+    if (Util.dateFromSeconds(lastUpdateSeconds).isBefore(new DateTime().minusDays(MAX_IDLE_DAYS_TO_REFRESH)) ||
+        Util.dateFromSeconds(lastRefreshSeconds).isBefore(new DateTime().minusDays(MAX_DAYS_TO_REFRESH)))
       fetchUserVenueHistory(userid, token)
     else if (Util.dateFromSeconds(lastUpdateSeconds).isAfter(new DateTime().minusMinutes(1)))
       Full(history) // We can give a little delay on reloading?
@@ -135,7 +137,6 @@ object UserData extends Loggable {
           history.venues(out)
         }
         history.setLastUpdate(new DateTime()).save
-
       })
     }
   }
@@ -199,5 +200,12 @@ object UserData extends Loggable {
         }
       })
     }).toSet
+  }
+
+  lazy val venueCategories = {
+    VenueCategories.create(getUserlessApp.venueCategories.get.response)
+  }
+  def initCaches {
+    venueCategories
   }
 }
