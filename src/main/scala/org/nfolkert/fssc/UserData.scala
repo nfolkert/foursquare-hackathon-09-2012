@@ -29,6 +29,12 @@ object UserData extends Loggable {
     })
   }
 
+  def getUserFriends(token: String): Option[User] = {
+    val app = getApp(token)
+//    app.selfFriends()
+    None
+  }
+
   def getVisitedPoints(token: String, user: User): Set[DataPoint[VisitData]] = {
     if (token == "test")
       sampleVisits

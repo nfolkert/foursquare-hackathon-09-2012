@@ -64,19 +64,19 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
   def welcome(xhtml: NodeSeq): NodeSeq = T("Render Welcome") {
     val url = S.uri
 
+    /*
+    // Uncomment to dump the request information
     S.request.map(r=>{
       val p = Util.printReq
       logger.info(p._1)
       logger.info(p._2)
     })
+    */
 
-    /*
-    // Uncomment to dump the request information
     if (Session.session.is.isDefined) {
       logger.info("Already logged in; redirecting to game map")
       S.redirectTo("/discover")
     }
-    */
 
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{

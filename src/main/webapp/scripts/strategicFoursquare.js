@@ -136,6 +136,14 @@ var g4c = function() {
         }
         closeInfoWindow()
       });
+      if (!isTouch) {
+        google.maps.event.addListener(rect, 'dblclick', function(event) {
+          var lat = event.latLng.lat()
+          var lng = event.latLng.lng()
+          updateSearchPosition(lat, lng)
+          $('#searchLatLng').val(lat + ',' + lng).blur()
+        })
+      }
       overlays.push(rect)
     }
   }
@@ -144,7 +152,8 @@ var g4c = function() {
     var mapOptions = {
       zoom: 10,
       center: new google.maps.LatLng(40, -74),
-      mapTypeId: google.maps.MapTypeId.ROADMAP
+      mapTypeId: google.maps.MapTypeId.ROADMAP,
+      disableDoubleClickZoom: true
     };
     map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
     google.maps.event.addListener(map, 'click', function() {
@@ -153,6 +162,12 @@ var g4c = function() {
     google.maps.event.addListener(map, 'dragstart', function() {
       closeInfoWindow()
     });
+    google.maps.event.addListener(map, 'dblclick', function(event) {
+      var lat = event.latLng.lat()
+      var lng = event.latLng.lng()
+      updateSearchPosition(lat, lng)
+      $('#searchLatLng').val(lat + ',' + lng).blur()
+    })
   }
 
   function updateSearchPosition(lat, lng) {
@@ -199,6 +214,7 @@ var g4c = function() {
       zoom: 10,
       center: new google.maps.LatLng(40, -74),
       mapTypeId: google.maps.MapTypeId.ROADMAP,
+      disableDoubleClickZoom: true,
       zoomControl: false, panControl: false, rotateControl: false,
       streetViewControl: false, scaleControl: false,
       scrollwheel: false, overviewMapControl: false,
