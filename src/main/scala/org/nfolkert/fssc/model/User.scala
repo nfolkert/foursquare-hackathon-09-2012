@@ -21,11 +21,12 @@ case object ViewType {
 
 case class PlayLevel(name: String, desc: String, gridSize: Int, initialZoom: Int) extends ModelConstant[PlayLevel]
 case object PlayLevel {
+  val overview = PlayLevel("overview", "Overview - City", 20000, 8)
   val easy = PlayLevel("easy", "Beginner - Neighborhood", 1500, 12)
   val medium = PlayLevel("medium", "Intermediate", 500, 14)
   val advanced = PlayLevel("advanced", "Advanced", 250, 15)
   val expert = PlayLevel("expert", "Expert - Block", 100, 16)
-  val values = List(easy, medium, advanced, expert)
+  val values = List(overview, easy, medium, advanced, expert)
   val defaultValue = medium
   def byName(str: String) = values.find(_.name == str).getOrElse(defaultValue)
 }

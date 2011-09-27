@@ -36,6 +36,10 @@ class Boot {
       Menu.i("DiscoverWeb") / "web_discover",
       Menu.i("DiscoverTouch") / "touch_discover",
       Menu.i("MapDetail") / "detailMap",
+      Menu.i("Menu") / "toc",
+      Menu.i("VsWeb") / "web_vs",
+      Menu.i("RiskWeb") / "web_risk",
+      Menu.i("OldRedirect") / "4sq_conquest",
 
       // more complex because this menu allows anything in the
       // /static path to be visible

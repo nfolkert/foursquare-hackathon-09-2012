@@ -5,3 +5,4 @@ access.token.user=<access token for testing>
 mongo.db.name=<mongo database name>
 mongo.db.address=<mongo database address>
 mongo.db.port=<mongo database port>
+encrypt.key=<local key for encryption>

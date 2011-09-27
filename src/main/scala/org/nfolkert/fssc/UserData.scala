@@ -1,13 +1,15 @@
 package org.nfolkert.fssc
 
 import model.{VenueCategories, UserVenueHistoryEntry, UserVenueHistory, User}
+import net.liftweb.common.{Full, Loggable, Box}
+import net.liftweb.json.JsonDSL._
 import net.liftweb.util.Props
 import org.joda.time.DateTime
-import org.scalafoursquare.auth.OAuthFlow
-import org.scalafoursquare.response.{Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
 import org.nfolkert.lib.{T, Util}
-import net.liftweb.common.{Full, Loggable, Box}
+import org.nfolkert.snippet.Session
+import org.scalafoursquare.auth.OAuthFlow
 import org.scalafoursquare.call.{UserlessApp, HttpCaller, AuthApp}
+import org.scalafoursquare.response.{UserCompact, Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
 
 object UserData extends Loggable {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -29,10 +31,18 @@ object UserData extends Loggable {
     })
   }
 
-  def getUserFriends(token: String): Option[User] = {
+  def getUserFriends(token: String): List[UserCompact] = {
     val app = getApp(token)
-//    app.selfFriends()
-    None
+
+    // TODO: should handle pages, followers
+    val allFriends = app.multi(List(
+      app.selfFriends(Some(500), Some(0)),
+      app.selfFriends(Some(500), Some(500))
+    )).get.responses.map(_.flatMap(_.response.map(_.friends.items).getOrElse(Nil))).getOrElse(Nil)
+
+    val dbUsers = User.findAll(("_id" -> ("$in" -> allFriends.map(_.id))))
+    val haveIds = dbUsers.map(_.id.value).toSet
+    allFriends.filter(u=>haveIds.contains(u.id))
   }
 
   def getVisitedPoints(token: String, user: User): Set[DataPoint[VisitData]] = {
@@ -167,6 +177,10 @@ object UserData extends Loggable {
       else
         fetchUserVenueHistory(user.id.value, token)
 
+    historyToVisitPoints(history)
+  }
+
+  def historyToVisitPoints(history: Box[UserVenueHistory]) = {
     T("Build Data Points") {
       history.map(r=>{
         r.venues.value.map(i => {
@@ -175,7 +189,7 @@ object UserData extends Loggable {
           val data = VisitData(v.beenHere, name)
           DataPoint(v.lat, v.lng, Some(data))
         }).toSet
-    }).openOr(Set[DataPoint[VisitData]]())
+      }).openOr(Set[DataPoint[VisitData]]())
     }
   }
 

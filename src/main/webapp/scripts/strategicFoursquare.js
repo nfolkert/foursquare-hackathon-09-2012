@@ -148,6 +148,84 @@ var g4c = function() {
     }
   }
 
+  function renderRiskMap(overlayArrs) {
+    // Clear existing overlays
+    for (var i = 0; i < overlays.length; i++)
+      overlays[i].setMap(null)
+    overlays.length = 0
+
+    var drawRects = function(rects, color) {
+      for (var i = 0; i < rects.length; i++) {
+        var r = rects[i];
+        var rectBounds = toBounds(r)
+        var rect = new google.maps.Rectangle()
+
+        var opts = {
+          strokeColor: color,
+          strokeOpacity: 1.0,
+          strokeWeight: 0,
+          fillColor: color,
+          fillOpacity: .7,
+          map: map,
+          bounds: rectBounds
+        }
+        rect.setOptions(opts)
+        overlays.push(rect)
+      }
+    }
+    var colors = ["#0000FF", "#FF0000", "#00FF00", "#FFFF00", "#00FFFF", "#FF00FF"]
+    for (var i = 0; i < overlayArrs.length; i++)
+      drawRects(overlayArrs[i], colors[i])
+  }
+
+  function renderVsMap(yours, theirs, both) {
+    // Clear existing overlays
+    for (var i = 0; i < overlays.length; i++)
+      overlays[i].setMap(null)
+    overlays.length = 0
+
+    var drawRects = function(rects, color) {
+      for (var i = 0; i < rects.length; i++) {
+        var r = rects[i];
+        var rectBounds = toBounds(r)
+        var rect = new google.maps.Rectangle()
+
+        var opts = {
+          strokeColor: color,
+          strokeOpacity: 1.0,
+          strokeWeight: 0,
+          fillColor: color,
+          fillOpacity: .7,
+          map: map,
+          bounds: rectBounds
+        }
+        rect.setOptions(opts)
+        overlays.push(rect)
+      }
+    }
+    drawRects(yours, "#0000FF")
+    drawRects(theirs, "#FF0000")
+    drawRects(both, "#FF00FF")
+  }
+
+  function setupRiskMap() {
+    var mapOptions = {
+      zoom: 10,
+      center: new google.maps.LatLng(40, -74),
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+    map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+  }
+
+  function setupVsMap() {
+    var mapOptions = {
+      zoom: 10,
+      center: new google.maps.LatLng(40, -74),
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+    map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+  }
+
   function setupMap() {
     var mapOptions = {
       zoom: 10,
@@ -236,11 +314,16 @@ var g4c = function() {
   return {
     setupMap: setupMap,
     setupTouchMap: setupTouchMap,
+    setupVsMap: setupVsMap,
+    setupRiskMap: setupRiskMap,
 
     updateCurrentPosition: updateCurrentPosition,
     updateSearchPosition: updateSearchPosition,
 
     renderMap: renderMap,
+    renderVsMap: renderVsMap,
+    renderRiskMap: renderRiskMap,
+
     redrawOverlays: redrawOverlays,
     renderRecommendations: renderRecommendations,
     setOverlayOpacity: setOverlayOpacity,

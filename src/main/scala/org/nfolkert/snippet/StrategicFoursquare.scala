@@ -3,15 +3,21 @@ package org.nfolkert.snippet
 import net.liftweb.util.Helpers._
 import net.liftweb.http.js.{JsCmds, JsCmd}
 import net.liftweb.http.{SessionVar, SHtml, DispatchSnippet, S}
-import xml.{Elem, NodeSeq}
-import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
-import net.liftweb.util.Props
 import net.liftweb.common.{Loggable, Full}
+import net.liftweb.json.JsonDSL._
+import net.liftweb.util.Props
+import org.nfolkert.fssc.{Game, RecData, VisitData, UserData, Rectangle, MapGrid, Cluster, DataPoint}
 import org.nfolkert.fssc.model.{RecommendationType, PlayLevel, ViewType, UserVenueHistory, User}
 import org.nfolkert.lib.{Util, SHtmlExt, T}
+import xml.{Elem, NodeSeq}
+import org.scalafoursquare.response.UserCompact
 
-case class Session(token: String, user: User, userAgent: UserAgent) // TODO: additional information for current state (map bounds, zoom level, etc.)
+case class Session(token: String, user: User, userAgent: UserAgent) {
 
+  lazy val userFriends: List[UserCompact] = UserData.getUserFriends(token)
+
+  // TODO: additional information for current state (map bounds, zoom level, etc.)
+}
 case class UserAgent(name: String)
 case object UserAgent {
   val iPhone = UserAgent("iPhone")
@@ -46,6 +52,7 @@ object Session extends Loggable {
 
   def getOrRedirect: Session = Session.session.is.map(identity).orElse({
     logger.info("Not logged in; redirecting to index")
+    S.set("continue", S.uri)
     S.redirectTo("/")
   }).get
 }
@@ -58,6 +65,9 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
     case "renderTouchMap" => InSession().renderTouchMap _
     case "preferences" => InSession().preferences _
     case "discovery" => InSession().discoveryRedirect _
+    case "renderWebVsMap" => InSession().renderWebVsMap _
+    case "renderWebRiskMap" => InSession().renderWebRiskMap _
+    case "redirectRoot" => redirectRoot _
     case _ => welcome _
   }
 
@@ -78,12 +88,14 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
       S.redirectTo("/discover")
     }
 
+    def continue = S.get("continue").getOrElse("/discover")
+
     val oauth = UserData.oauth
     S.param("code").flatMap(code=>{
       tryo(oauth.accessTokenCaller(code).get)
-    }).map(t=>{Session.setup(t); InSession().discoveryRedirect(xhtml)}).getOrElse({
+    }).map(t=>{Session.setup(t); S.redirectTo(continue)}).getOrElse({
       S.param("test").map(p=>{
-        Session.setup(p); InSession().discoveryRedirect(xhtml)
+        Session.setup(p); S.redirectTo(continue)
       }).getOrElse({
         def renderLink(xhtml: NodeSeq): NodeSeq = {
           <a href={oauth.authorizeUrl}>{xhtml}</a>
@@ -94,8 +106,13 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
     })
   }
 
+  def redirectRoot(xhtml: NodeSeq): NodeSeq = {
+    S.redirectTo("/")
+  }
+
   case class InSession() {
-    val Session(token, user, userAgent) = Session.getOrRedirect
+    val session = Session.getOrRedirect
+    val Session(token, user, userAgent) = session
 
     def discoveryRedirect(xhtml: NodeSeq): NodeSeq = {
       S.param("display") match {
@@ -204,7 +221,6 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
 
           val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
           val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
-
           val eqScale = math.log(breadth).toInt
           val zoom = math.max(1, 18 - (eqScale-2))
 
@@ -281,84 +297,288 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
         xhtml
     }
 
-  def renderWebMap(xhtml: NodeSeq): NodeSeq = {
-    val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
-    val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
+    def renderWebVsMap(xhtml: NodeSeq): NodeSeq = {
 
-    if (!clusters.isEmpty) {
-      var clusterIdx = 0
-      val gridSize = user.getPlayLevel.gridSize
-      val opacity = user.opacity.value
-      var searchLatLng: Option[(Double, Double)] = None
-      val showOverlayBorders = false
-      val recType = user.getRecommendations.name
+      val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+      val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
-      def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
-        val cluster = if (clusterIdx < 0) {
-          Cluster(visitPoints(0), visitPoints.toSet)
-        } else
-          clusters(clusterIdx)
-        val pts = cluster.pts
-        val bounds = cluster.bounds
-        if (searchLatLng.isEmpty || resetZoom) {
-          searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+      if (!clusters.isEmpty) {
+        var clusterIdx = 0
+        val gridSize = user.getPlayLevel.gridSize
+        val zoom = user.getPlayLevel.initialZoom
+        var friendVisitPoints: List[DataPoint[VisitData]] = Nil
+        var firstTime = true
+
+        def generateCall(clusterChanged: Boolean) = T("Generate Vs. Map JS") {
+          firstTime = false
+          val cluster = if (clusterIdx < 0) {
+            Cluster(visitPoints(0), visitPoints.toSet)
+          } else
+            clusters(clusterIdx)
+          val pts = cluster.pts
+          val vsPoints = if (clusterIdx >= 0) friendVisitPoints.filter(_.distanceTo(cluster.anchor) < 40000) else friendVisitPoints
+          
+          val grid = MapGrid(gridSize, 1.5, pts)
+          val vsGrid = MapGrid(gridSize, 1.5, vsPoints.toSet)
+
+          val combinedCluster = Cluster(cluster.anchor, pts ++ vsPoints)
+          val bounds = combinedCluster.bounds
+          val sw = grid.snapPoint(bounds._1)
+          val ne = grid.snapPoint(bounds._2)
+          val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
+
+          val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
+          val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+          val eqScale = math.log(breadth).toInt
+          val zoom = math.max(1, 18 - (eqScale-2))
+
+          val yourRectPts = grid.covered.toSet
+          val theirRectPts = vsGrid.covered.toSet
+
+          val yoursOnly = Rectangle.sortByTop(yourRectPts.diff(theirRectPts).toList)
+          val theirsOnly = Rectangle.sortByTop(theirRectPts.diff(yourRectPts).toList)
+          val intersect = Rectangle.sortByTop(yourRectPts.intersect(theirRectPts).toList)
+
+          val yourScore = Game.calculateScore(yoursOnly, grid.latSnap, grid.lngSnap)
+          val theirScore = Game.calculateScore(theirsOnly, grid.latSnap, grid.lngSnap)
+          val bothScore = Game.calculateScore(intersect, grid.latSnap, grid.lngSnap)
+
+          def overlaysJson(rects: List[Rectangle]) = Rectangle.merge(rects).map(_.toJson).join(",")
+
+          def renderVsMapCall(yourJson: String, theirJson: String, bothJson: String) = {
+            def arr(str: String) = "[" + str + "]"
+            "g4c.renderVsMap" + (arr(yourJson), arr(theirJson), arr(bothJson)).toString
+          }
+
+          JsCmds.SetHtml("visited_you", <span>{yourScore.visited}</span>) &
+          JsCmds.SetHtml("totalPoints_you", <span>{yourScore.total}</span>) &
+          JsCmds.SetHtml("visited_them", <span>{theirScore.visited}</span>) &
+          JsCmds.SetHtml("totalPoints_them", <span>{theirScore.total}</span>) &
+          JsCmds.SetHtml("visited_both", <span>{bothScore.visited}</span>) &
+          JsCmds.SetHtml("totalPoints_both", <span>{bothScore.total}</span>) &
+          JsCmds.Run(renderVsMapCall(overlaysJson(yoursOnly), overlaysJson(theirsOnly), overlaysJson(intersect))) &
+          (if (clusterChanged) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop)
         }
 
-        val grid = MapGrid(gridSize, 1.5, pts)
+        val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+        val friendOpts = session.userFriends.map(u => (u.id, u.firstName + u.lastName.map(ln=>" "+ln).getOrElse("")))
 
-        val covered = T("Covered Cells") { grid.covered }
-        val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
-        val recPts = searchLatLng.map(p => {
-          val (lat, lng) = p
-          UserData.getRecommendedPoints(lat, lng, grid, rects.toSet, recType, true, token).toList
-        }).getOrElse(Nil)
+        bind("map", xhtml,
+             "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
+               clusterIdx = tryo(newCluster.toInt).openOr(0)
+               generateCall(true)
+             }),
+             "friend" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               val friendHistory = UserData.getCachedUserVenueHistory(fid)
+               friendVisitPoints = MapGrid.sortPointsByLatLng(UserData.historyToVisitPoints(friendHistory))
+               generateCall(firstTime)
+             })
+        )
+      }
+      else
+        xhtml
+    }
 
-        val center = searchLatLng.getOrElse((cluster.anchor.lat, cluster.anchor.lng))
+    def renderWebRiskMap(xhtml: NodeSeq) = {
+      val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+      val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
 
+      if (!clusters.isEmpty) {
+        var clusterIdx = 0
+        val gridSize = user.getPlayLevel.gridSize
         val zoom = user.getPlayLevel.initialZoom
 
-        val debug = <div>
-          <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
-          <div>Total Point Count: {visitPoints.size}</div>
-          <div>Cluster Point Count: {pts.size}</div>
-          <div>Overlay Count: {rects.size}</div>
-        </div>
+        var f1: Option[UserCompact] = None
+        var f2: Option[UserCompact] = None
+        var f3: Option[UserCompact] = None
+        var f4: Option[UserCompact] = None
+        var f5: Option[UserCompact] = None
 
-        val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+        var firstTime = true
 
-        def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
-        def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
+        def generateCall(clusterChanged: Boolean) = T("Generate Vs. Map JS") {
+          firstTime = false
+          val cluster = if (clusterIdx < 0) {
+            Cluster(visitPoints(0), visitPoints.toSet)
+          } else
+            clusters(clusterIdx)
+          val pts = cluster.pts
 
-        JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
-        JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
-        JsCmds.SetHtml("debug", debug) &
-        JsCmds.Run(setOpacityCall(opacity)) &
-        (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
-        JsCmds.Run(renderRecsCall(recommendationsJson)) &
-        (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop) &
-        searchLatLng.map(p=>JsCmds.Run(updateSearchCall(p._1, p._2))).getOrElse(JsCmds.Noop)
+          val fList = List(f1, f2, f3, f4, f5).map(_.toList).flatten
+          val fPts: List[(String, Set[DataPoint[VisitData]])] = (user.id.value, pts) :: fList.map(u=>{
+            val hist = UserData.getCachedUserVenueHistory(u.id)
+            val pts = UserData.historyToVisitPoints(hist)
+            (u.id, (if (clusterIdx >= 0) pts.filter(_.distanceTo(cluster.anchor) < 40000) else pts))
+          })
+
+          val grid = MapGrid(gridSize, 1.5, pts)
+          def snap(pts: Set[DataPoint[VisitData]]) = {
+            grid.combineSnapPoints(grid.snapPoints(pts))
+          }
+          val snapFPts = fPts.map(p=>(p._1, snap(p._2)))
+          val fMaps = snapFPts.map(p=>(p._1, p._2.map(pt=>((pt.lat, pt.lng), pt)).toMap))
+
+          val allCoords = fMaps.toList.flatMap(_._2.keySet).distinct
+
+          val ptFilter = allCoords.map(c=>{
+            val max = fMaps.foldLeft((0, ""))((acc, umap) => {
+              umap._2.get(c).map(pt => {
+                val visits = pt.data.map(_.visits).getOrElse(1)
+                if (visits > acc._1 ||
+                    (visits == acc._1 && umap._1 < acc._2))
+                  (visits, umap._1)
+                else
+                  acc
+              }).getOrElse(acc)
+            })
+            (c, max._2)
+          }).toMap
+
+          val filtSnapFPts: List[(String, Set[DataPoint[VisitData]])] = snapFPts.map(p=>{
+            (p._1, p._2.filter(pt=>ptFilter.get((pt.lat, pt.lng)).exists(_ == p._1)))
+          })
+
+          val allPoints = filtSnapFPts.flatMap(_._2).toSet
+          val combinedCluster = Cluster(cluster.anchor, allPoints)
+          val bounds = combinedCluster.bounds
+          val sw = grid.snapPoint(bounds._1)
+          val ne = grid.snapPoint(bounds._2)
+          val boundRect = Rectangle(sw.lng, sw.lat, ne.lng+grid.lngSnap, ne.lat+grid.latSnap)
+          val center = (boundRect.bottom + .5 * boundRect.height, boundRect.left + .5 * boundRect.length)
+          val breadth = math.max(boundRect.height, boundRect.length) * grid.metersInDegLat
+          val eqScale = math.log(breadth).toInt
+          val zoom = math.max(1, 18 - (eqScale-2))
+
+          val rectangles = filtSnapFPts.map(p=>(p._1, p._2.map(pt=>grid.pointToRect(pt))))
+          val rectLists = rectangles.map(p=>(p._1, Rectangle.sortByTop(p._2.toList)))
+          val scores = rectLists.map(p=>(p._1, Game.calculateScore(p._2, grid.latSnap, grid.lngSnap)))
+          val rectMerged = rectLists.map(p=>(p._1, Rectangle.merge(p._2)))
+
+          def overlaysJson(rects: List[Rectangle]) = rects.map(_.toJson).join(",")
+
+          def renderRiskMapCall(jsonList: List[String]) = {
+            def arr(str: String) = "[" + str + "]"
+            "g4c.renderRiskMap(" + arr(jsonList.map(j=>arr(j)).join(",")) + ")"
+          }
+
+          // TODO: render scores
+
+          JsCmds.Run(renderRiskMapCall(rectMerged.map(p=>overlaysJson(p._2)))) &
+          (if (clusterChanged) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop)
+        }
+
+        val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+        val friendOpts = ("", "--") :: session.userFriends.map(u => (u.id, u.firstName + u.lastName.map(ln=>" "+ln).getOrElse("")))
+
+        bind("map", xhtml,
+             "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
+               clusterIdx = tryo(newCluster.toInt).openOr(0)
+               generateCall(true)
+             }),
+             "friend1" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               f1 = session.userFriends.find(_.id == fid)
+               generateCall(firstTime)
+             }),
+             "friend2" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               f2 = session.userFriends.find(_.id == fid)
+               generateCall(firstTime)
+             }),
+             "friend3" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               f3 = session.userFriends.find(_.id == fid)
+               generateCall(firstTime)
+             }),
+             "friend4" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               f4 = session.userFriends.find(_.id == fid)
+               generateCall(firstTime)
+             }),
+             "friend5" -%> SHtml.ajaxSelect(friendOpts, friendOpts.headOption.map(_._1), (fid) => {
+               f5 = session.userFriends.find(_.id == fid)
+               generateCall(firstTime)
+             })
+        )
       }
-
-      val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
-
-      bind("map", xhtml,
-           "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
-             clusterIdx = tryo(newCluster.toInt).openOr(0)
-             generateCall(true, true)
-           }),
-           "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
-             val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
-             if (asList.size == 2) {
-               searchLatLng = Some(asList(0), asList(1))
-               generateCall(false, false)
-             } else JsCmds.Noop
-
-           })
-      )
+      else
+        xhtml
     }
-    else
-      xhtml
-  }
+
+    def renderWebMap(xhtml: NodeSeq): NodeSeq = {
+      val visitPoints = MapGrid.sortPointsByVisits(UserData.getVisitedPoints(token, user))
+      val clusters = T("Build Clusters") { Cluster.buildClusters2(visitPoints).toList.sortBy(-_.pts.size) }
+
+      if (!clusters.isEmpty) {
+        var clusterIdx = 0
+        val gridSize = user.getPlayLevel.gridSize
+        val opacity = user.opacity.value
+        var searchLatLng: Option[(Double, Double)] = None
+        val showOverlayBorders = false
+        val recType = user.getRecommendations.name
+
+        def generateCall(resetZoom: Boolean, redrawOverlays: Boolean) = T("Generate Map JS") {
+          val cluster = if (clusterIdx < 0) {
+            Cluster(visitPoints(0), visitPoints.toSet)
+          } else
+            clusters(clusterIdx)
+          val pts = cluster.pts
+          val bounds = cluster.bounds
+          if (searchLatLng.isEmpty || resetZoom) {
+            searchLatLng = Some((cluster.anchor.lat, cluster.anchor.lng))
+          }
+
+          val grid = MapGrid(gridSize, 1.5, pts)
+
+          val covered = T("Covered Cells") { grid.covered }
+          val rects = T("Grid Decomposition") { Rectangle.sortByLeft(grid.decompose.toList) }
+          val recPts = searchLatLng.map(p => {
+            val (lat, lng) = p
+            UserData.getRecommendedPoints(lat, lng, grid, rects.toSet, recType, true, token).toList
+          }).getOrElse(Nil)
+
+          val center = searchLatLng.getOrElse((cluster.anchor.lat, cluster.anchor.lng))
+
+          val zoom = user.getPlayLevel.initialZoom
+
+          val debug = <div>
+            <div>Current Position: {searchLatLng.map(_.toString).getOrElse("Unknown")}</div>
+            <div>Total Point Count: {visitPoints.size}</div>
+            <div>Cluster Point Count: {pts.size}</div>
+            <div>Overlay Count: {rects.size}</div>
+          </div>
+
+          val score = Game.calculateScore(covered, grid.latSnap, grid.lngSnap)
+
+          def overlaysJson = T("Overlays Json") { rects.map(_.toJson).join(",") }
+          def recommendationsJson = T("Recommendations Json") { recPts.flatMap(pt=>RecData.pointToJson(pt)).join(",") }
+
+          JsCmds.SetHtml("visited", <span>{score.visited}</span>) &
+          JsCmds.SetHtml("totalPoints", <span>{score.total}</span>) &
+          JsCmds.SetHtml("debug", debug) &
+          JsCmds.Run(setOpacityCall(opacity)) &
+          (if (redrawOverlays) JsCmds.Run(renderMapCall(overlaysJson)) else JsCmds.Noop) &
+          JsCmds.Run(renderRecsCall(recommendationsJson)) &
+          (if (resetZoom) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop) &
+          searchLatLng.map(p=>JsCmds.Run(updateSearchCall(p._1, p._2))).getOrElse(JsCmds.Noop)
+        }
+
+        val clusterOpts = (1 to clusters.size).toList.zip(clusters).map(p=>((p._1-1).toString, VisitData.clusterName(p._2))) ++ List(((-1).toString, "ALL"))
+
+        bind("map", xhtml,
+             "cluster" -%> SHtml.ajaxSelect(clusterOpts, Full(clusterIdx.toString), (newCluster) => {
+               clusterIdx = tryo(newCluster.toInt).openOr(0)
+               generateCall(true, true)
+             }),
+             "searchlatlng" -%> SHtml.ajaxText("", (newVal) => {
+               val asList = newVal.split(',').toList.flatMap(s=>tryo(s.toDouble))
+               if (asList.size == 2) {
+                 searchLatLng = Some(asList(0), asList(1))
+                 generateCall(false, false)
+               } else JsCmds.Noop
+
+             })
+        )
+      }
+      else
+        xhtml
+    }
 
   def renderTouchMap(xhtml: NodeSeq): NodeSeq = {
     val url = S.uri

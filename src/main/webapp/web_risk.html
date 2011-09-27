@@ -1,6 +1,6 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:lift="http://liftweb.net"
-      class="lift:StrategicFoursquare.renderMap">
+      class="lift:StrategicFoursquare.renderWebRiskMap">
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
     <title>4Sq Conquest</title>
@@ -9,41 +9,27 @@
     <script src="/scripts/strategicFoursquare.js"></script>
     <script type="text/javascript">
       $(document).ready(function() {
-        g4c.setupMap()
-        document.getElementById('clusterSelect').onchange();
+        g4c.setupRiskMap()
+        document.getElementById('friendMultiSelect1').onchange();
       })
     </script>
   </head>
   <body style="font-family:Helvetica, Verdana, Arial, sans-serif; text-align:center">
-    <div style="text-decoration:italic; color:#555">
-      <div>
-        Map regions are revealed as you check in to venues in the concealed areas.
-      </div>
-      <div>
-        Drag the placemark to a region you would like to explore, and foursquare will find recommended places in
-        the areas you have yet to explore.
-      </div>
-      <br/>
-    </div>
     <div>
       <div id="map_canvas" style="width:860px; height:500px; margin-left:auto; margin-right:auto"></div>
     </div>
     <br/>
     <div style="width:860px; margin-left:auto; margin-right:auto">
       <div>
-        <table style="text-align:left; float:left; width:300px; background-color:#CCC; font-size:12px">
-          <tr><td>Visited Regions</td><td><span id="visited"></span></td></tr>
-          <tr><td>Score</td><td><span id="totalPoints"></span></td></tr>
-        </table>
         <table style="text-align:left; float:right; width:300px; background-color:#CCC; font-size:12px">
           <tr><td colspan="2" style="background-color:#EEE; text-align:center"><h3>Controls</h3></td></tr>
           <tr><td>Cluster</td><td><map:cluster id="clusterSelect"/></td></tr>
-          <tr><td>Grid Size</td><td><map:gridsize/></td></tr>
-          <tr><td>Opacity</td><td><map:opacity/></td></tr>
-          <tr><td>Overlay Borders</td><td><map:overlayborders/></td></tr>
-          <tr><td>Recommendations</td><td><map:recommendations/></td></tr>
+          <tr><td>Friend 1</td><td><map:friend1 id="friendMultiSelect1"/></td></tr>
+          <tr><td>Friend 2</td><td><map:friend2 id="friendMultiSelect2"/></td></tr>
+          <tr><td>Friend 3</td><td><map:friend3 id="friendMultiSelect3"/></td></tr>
+          <tr><td>Friend 4</td><td><map:friend4 id="friendMultiSelect4"/></td></tr>
+          <tr><td>Friend 5</td><td><map:friend5 id="friendMultiSelect5"/></td></tr>
         </table>
-        <div style="display:none"><map:searchlatlng id="searchLatLng"/></div>
       </div>
     </div>
     <div id="debug" style="clear:both"></div>

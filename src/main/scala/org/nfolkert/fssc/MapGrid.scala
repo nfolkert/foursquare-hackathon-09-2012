@@ -227,7 +227,7 @@ case class MapGrid(latGridSizeInMeters: Int,
     }).groupBy(_._1).map(p=>(p._1, p._2.map(_._2)))
   }
 
-  protected def combineSnapPoints(pts: Set[DataPoint[VisitData]]): Set[DataPoint[VisitData]] = {
+  def combineSnapPoints(pts: Set[DataPoint[VisitData]]): Set[DataPoint[VisitData]] = {
     pts.groupBy(pt=>(pt.lat, pt.lng)).toList.map(p=>{
       val totalVisits = p._2.map(pt=>pt.data.map(_.visits).getOrElse(0)).sum
       val commonName = p._2.toList.flatMap(pt=>pt.data.map(_.name)).groupBy(n=>n).toList.sortBy(-_._2.size).map(_._1).headOption.getOrElse(p._1._1 + ", " + p._1._2)
