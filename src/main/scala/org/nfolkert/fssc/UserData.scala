@@ -42,7 +42,7 @@ object UserData extends Loggable {
 
     val dbUsers = User.findAll(("_id" -> ("$in" -> allFriends.map(_.id))))
     val haveIds = dbUsers.map(_.id.value).toSet
-    allFriends.filter(u=>haveIds.contains(u.id))
+    allFriends.filter(u=>haveIds.contains(u.id)).sortBy(u=>u.firstName+u.lastName.map(ln=>" "+ln).getOrElse(""))
   }
 
   def getVisitedPoints(token: String, user: User): Set[DataPoint[VisitData]] = {

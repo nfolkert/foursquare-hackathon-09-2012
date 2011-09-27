@@ -461,8 +461,15 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
             "g4c.renderRiskMap(" + arr(jsonList.map(j=>arr(j)).join(",")) + ")"
           }
 
-          // TODO: render scores
+          def renderScoreRows: NodeSeq = {
+            val names = ((user.id.value -> "You") :: session.userFriends.map(u=>(u.id, u.firstName+(u.lastName.map(ln=>" "+ln).getOrElse(""))))).toMap
 
+            <tr><td></td>{scores.map(p=> <td>{names.get(p._1).getOrElse("?")}</td>)}</tr>
+            <tr><td>Visited Regions</td>{scores.map(p=> <td>{p._2.visited}</td>)}</tr>
+            <tr><td>Score</td>{scores.map(p=> <td>{p._2.total}</td>)}</tr>
+          }
+
+          JsCmds.SetHtml("userScores", renderScoreRows) &
           JsCmds.Run(renderRiskMapCall(rectMerged.map(p=>overlaysJson(p._2)))) &
           (if (clusterChanged) JsCmds.Run(resetViewCall(center._1, center._2, zoom)) else JsCmds.Noop)
         }
