@@ -463,8 +463,10 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
 
           def renderScoreRows: NodeSeq = {
             val names = ((user.id.value -> "You") :: session.userFriends.map(u=>(u.id, u.firstName+(u.lastName.map(ln=>" "+ln).getOrElse(""))))).toMap
+            val colors = List("#0000FF", "#FF0000", "#00FF00", "#FFFF00", "#00FFFF", "#FF00FF").take(scores.length)
 
-            <tr><td></td>{scores.map(p=> <td>{names.get(p._1).getOrElse("?")}</td>)}</tr>
+            <tr><td>Name</td>{scores.map(p=> <td>{names.get(p._1).getOrElse("?")}</td>)}</tr>
+            <tr><td>Color</td>{colors.map(c=> <td style={"background:" + c}></td>)}</tr>
             <tr><td>Visited Regions</td>{scores.map(p=> <td>{p._2.visited}</td>)}</tr>
             <tr><td>Score</td>{scores.map(p=> <td>{p._2.total}</td>)}</tr>
           }
