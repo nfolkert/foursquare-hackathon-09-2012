@@ -9,7 +9,7 @@ import org.nfolkert.lib.{T, Util}
 import org.nfolkert.snippet.Session
 import org.scalafoursquare.auth.OAuthFlow
 import org.scalafoursquare.call.{UserlessApp, HttpCaller, AuthApp}
-import org.scalafoursquare.response.{UserCompact, Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
+import org.scalafoursquare.response.{VenueSearchResponse, UserCompact, Response, VenueExploreResponse, VenueCompact, VenueLocation, CheckinForFriend}
 
 object UserData extends Loggable {
   val AUTH_TOKEN = Props.get("access.token.user").open_!
@@ -75,10 +75,15 @@ object UserData extends Loggable {
           app.exploreVenues(lat, lng, radius=Some(gridSize*3), novelty=Some("new"), section=section)
         ) ++ (if (wide) List(app.exploreVenues(lat, lng, radius=Some(gridSize*10), novelty=Some("new"), section=section)) else Nil)
 
-      // TODO: consider parallelizing locally; multi endpoint does not parallelize
-      val raw = app.multi(reqs).get
+      val raw = app.multi(
+        app.exploreVenues(lat, lng, radius=Some(gridSize), novelty=Some("new"), section=section),
+        app.exploreVenues(lat, lng, radius=Some(gridSize*4), novelty=Some("new"), section=section),
+        app.venueSearch(lat, lng, limit=Some(50), intent=Some("checkin")),
+        app.venueSearch(lat, lng, limit=Some(50), intent=Some("match"))
+      ).get
 
-      def filterRecommendations(response: Response[VenueExploreResponse]) = {
+      // TODO: consider parallelizing locally; multi endpoint does not parallelize
+      def filterRecommendations(response: Response[VenueExploreResponse]): List[DataPoint[RecData]] = {
         response.response.flatMap(_.groups.find(_.`type` == "recommended")).map(veg=>{
           val venues: List[VenueCompact] = veg.items.map(_.venue)
           val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
@@ -86,7 +91,20 @@ object UserData extends Loggable {
         }).getOrElse(Nil)
       }
 
-      val filtered = raw.responses.toList.flatMap(identity).flatMap(r=>filterRecommendations(r)).toList
+      def filterSearch(response: Response[VenueSearchResponse]): List[DataPoint[RecData]] = {
+        response.response.map(r=>{
+          val venues: List[VenueCompact] = r.venues.filter(!_.categories.isEmpty)
+          val points: List[DataPoint[RecData]] = venues.flatMap(v=>for{lat <- v.location.lat; lng <- v.location.lng} yield DataPoint(lat, lng, Some(RecData(v))))
+          points.filter(pt=>filters.find(_.contains(pt)).isDefined)
+        }).getOrElse(Nil)
+      }
+
+      val e1 = raw.responses._1.toList.flatMap(r=>filterRecommendations(r))
+      val e2 = raw.responses._2.toList.flatMap(r=>filterRecommendations(r))
+      val s1 = raw.responses._3.toList.flatMap(r=>filterSearch(r))
+      val s2 = raw.responses._4.toList.flatMap(r=>filterSearch(r))
+
+      val filtered = (e1 ++ e2 ++ s1 ++ s2).distinct
       val maxPerCell = 2
       grid.mapToGrid(filtered).toList.flatMap(p=>{
         val inGrid = p._2

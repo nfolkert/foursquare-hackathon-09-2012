@@ -42,7 +42,7 @@ object RecData {
   implicit val formats = DefaultFormats
 
   def toJson(data: RecData) = {
-    val cat = data.venue.categories.find(_.primary.getOrElse(false))
+    val cat = data.venue.categories.find(_.primary.getOrElse(false)).orElse(data.venue.categories.headOption)
     val catIcon = cat.map(_.icon)
     val catName = cat.map(_.name)
     val name = data.venue.name
