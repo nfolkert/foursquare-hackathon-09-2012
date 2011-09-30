@@ -604,11 +604,12 @@ class StrategicFoursquare extends DispatchSnippet with Loggable {
     val recType = user.getRecommendations.name
 
     def initializeMap {
+      val near = gridSize * 30
       currLatLng.map {ll =>
         initialLatLng = Some(ll)
         prevLatLng = Some(ll)
         val allPoints = UserData.getVisitedPoints(token, user)
-        val closePoints = allPoints.filter(_.distanceTo(ll._1, ll._2) < 3000)
+        val closePoints = allPoints.filter(_.distanceTo(ll._1, ll._2) < near)
         cluster = closePoints.headOption.map(a => Cluster(a, closePoints))
       }
     }

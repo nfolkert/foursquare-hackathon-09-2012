@@ -60,7 +60,8 @@ object UserData extends Loggable {
                            recType: String,
                            wide: Boolean,
                            token: String): Set[DataPoint[RecData]] = T("Get Recommendations") {
-    if (recType == "none")
+    val gridSize = grid.latGridSizeInMeters
+    if (recType == "none" || gridSize > 2000)
       Set[DataPoint[RecData]]()
     else {
       val app = getApp(token)
@@ -68,18 +69,10 @@ object UserData extends Loggable {
         case "all" => None;
         case t => Some(t)
       }
-      val gridSize = grid.latGridSizeInMeters
-
-      val reqs = List(
-          app.exploreVenues(lat, lng, radius=Some(gridSize), novelty=Some("new"), section=section),
-          app.exploreVenues(lat, lng, radius=Some(gridSize*3), novelty=Some("new"), section=section)
-        ) ++ (if (wide) List(app.exploreVenues(lat, lng, radius=Some(gridSize*10), novelty=Some("new"), section=section)) else Nil)
 
       val raw = app.multi(
-        app.exploreVenues(lat, lng, radius=Some(gridSize), novelty=Some("new"), section=section),
-        app.exploreVenues(lat, lng, radius=Some(gridSize*4), novelty=Some("new"), section=section),
-        app.venueSearch(lat, lng, limit=Some(50), intent=Some("checkin")),
-        app.venueSearch(lat, lng, limit=Some(50), intent=Some("match"))
+        app.exploreVenues(lat, lng, radius=Some(math.min(gridSize*4, 5000)), limit=Some(50), novelty=Some("new"), section=section),
+        app.venueSearch(lat, lng, limit=Some(50), intent=Some("checkin"))
       ).get
 
       // TODO: consider parallelizing locally; multi endpoint does not parallelize
@@ -100,11 +93,9 @@ object UserData extends Loggable {
       }
 
       val e1 = raw.responses._1.toList.flatMap(r=>filterRecommendations(r))
-      val e2 = raw.responses._2.toList.flatMap(r=>filterRecommendations(r))
-      val s1 = raw.responses._3.toList.flatMap(r=>filterSearch(r))
-      val s2 = raw.responses._4.toList.flatMap(r=>filterSearch(r))
+      val s1 = raw.responses._2.toList.flatMap(r=>filterSearch(r))
 
-      val filtered = (e1 ++ e2 ++ s1 ++ s2).distinct
+      val filtered = (e1 ++ s1).distinct
       val maxPerCell = 2
       grid.mapToGrid(filtered).toList.flatMap(p=>{
         val inGrid = p._2
